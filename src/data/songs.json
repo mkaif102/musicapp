@@ -1,0 +1,121 @@
+{
+  "songs": [
+    {
+      "id": "s_afsanay",
+      "name": "Afsanay",
+      "artist": "Talha Anjum",
+      "album": "Afsanay",
+      "duration": "3:45",
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+      "artwork": "https://picsum.photos/seed/afsanay/300"
+    },
+    {
+      "id": "s_gumaan",
+      "name": "Gumaan",
+      "artist": "Talha Anjum",
+      "album": "Gumaan",
+      "duration": "4:12",
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+      "artwork": "https://picsum.photos/seed/gumaan/300"
+    },
+    {
+      "id": "s_downers",
+      "name": "Downers At Dusk",
+      "artist": "Talha Anjum",
+      "album": "Downers At Dusk",
+      "duration": "4:30",
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+      "artwork": "https://picsum.photos/seed/downers/300"
+    },
+    {
+      "id": "s_painkillers",
+      "name": "Pain Killers",
+      "artist": "Talha Anjum",
+      "album": "Pain Killers",
+      "duration": "3:50",
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+      "artwork": "https://picsum.photos/seed/painkillers/300"
+    },
+    {
+      "id": "s_kya",
+      "name": "Kya Tumhe Pata Hai",
+      "artist": "Hasan Raheem",
+      "album": "Kya Tumhe Pata Hai",
+      "duration": "3:20",
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
+      "artwork": "https://picsum.photos/seed/kya/300"
+    },
+    {
+      "id": "s_aisay",
+      "name": "Aisay Kaisay",
+      "artist": "Hasan Raheem",
+      "album": "Aisay Kaisay",
+      "duration": "3:45",
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
+      "artwork": "https://picsum.photos/seed/aisay/300"
+    },
+    {
+      "id": "s_woh",
+      "name": "Woh",
+      "artist": "Hasan Raheem",
+      "album": "Woh",
+      "duration": "4:00",
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3",
+      "artwork": "https://picsum.photos/seed/woh/300"
+    },
+    {
+      "id": "s_mann",
+      "name": "Mann",
+      "artist": "Talwinder",
+      "album": "Mann",
+      "duration": "3:50",
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3",
+      "artwork": "https://picsum.photos/seed/mann/300"
+    },
+    {
+      "id": "s_sukoon",
+      "name": "Sukoon",
+      "artist": "Talwinder",
+      "album": "Sukoon",
+      "duration": "4:15",
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3",
+      "artwork": "https://picsum.photos/seed/sukoon/300"
+    },
+    {
+      "id": "s_softbreeze",
+      "name": "Soft Breeze",
+      "artist": "Ambient",
+      "album": "Chill Lofi",
+      "duration": "3:45",
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+      "artwork": "https://picsum.photos/seed/softbreeze/300"
+    },
+    {
+      "id": "s_beastmode",
+      "name": "Beast Mode",
+      "artist": "Pump Crew",
+      "album": "Energy",
+      "duration": "3:45",
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+      "artwork": "https://picsum.photos/seed/beastmode/300"
+    },
+    {
+      "id": "s_deepfocus",
+      "name": "Deep Focus",
+      "artist": "Brain Boost",
+      "album": "Focus",
+      "duration": "5:30",
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3",
+      "artwork": "https://picsum.photos/seed/deepfocus/300"
+    },
+    {
+      "id": "s_gentlerain",
+      "name": "Gentle Rain",
+      "artist": "Nature",
+      "album": "Rain",
+      "duration": "6:30",
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-13.mp3",
+      "artwork": "https://picsum.photos/seed/gentlerain/300"
+    }
+  ]
+}
