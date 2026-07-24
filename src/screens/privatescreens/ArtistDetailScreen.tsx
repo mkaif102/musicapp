@@ -15,55 +15,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import TrackPlayer, { usePlaybackState, State, useActiveTrack } from 'react-native-track-player';
-
-interface ApiSong {
-    id: number;
-    title: string;
-    duration: number;
-    preview: string;
-    artist: { id: number; name: string; picture_medium: string };
-    album: { id: number; title: string; cover_medium: string };
-    fullUrl?: string;
-}
-
-interface ArtistData {
-    id: number;
-    name: string;
-    picture_big: string;
-    nb_album: number;
-    nb_fan: number;
-}
-
-const AUDIUS_DISCOVERY = 'https://discovery.audius.co/api/v1';
-
-const searchAudius = async (title: string, artist: string): Promise<{ url: string; duration: number } | null> => {
-    const queries = [
-        `${title} ${artist}`,
-        title,
-    ];
-
-    for (const query of queries) {
-        try {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 12000);
-            const res = await fetch(
-                `${AUDIUS_DISCOVERY}/tracks/search?query=${encodeURIComponent(query)}&app_name=MusicApp&limit=5`,
-                { signal: controller.signal }
-            );
-            clearTimeout(timeout);
-            const data = await res.json();
-
-            if (data.data && data.data.length > 0) {
-                const track = data.data[0];
-                const streamUrl = `${AUDIUS_DISCOVERY}/tracks/${track.id}/stream?app_name=MusicApp`;
-                return { url: streamUrl, duration: track.duration || 0 };
-            }
-        } catch {
-            continue;
-        }
-    }
-    return null;
-};
+import { searchSongsByName, searchAll, getArtistDetails, getArtistSongs } from '../../services/jiosaavn';
+import { getSongsByArtist, parseDuration, songToTrack } from '../../data/songs';
+import type { Song } from '../../data/songs';
 
 // Equalizer Component
 const Equalizer = ({ isActive, isPlaying }: { isActive: boolean; isPlaying: boolean }) => {
@@ -140,10 +94,9 @@ const Equalizer = ({ isActive, isPlaying }: { isActive: boolean; isPlaying: bool
 
 const ArtistDetailScreen = ({ navigation, route }: any) => {
     const { artist } = route?.params || {};
-    const [songs, setSongs] = useState<ApiSong[]>([]);
-    const [artistData, setArtistData] = useState<ArtistData | null>(null);
+    const [songs, setSongs] = useState<Song[]>([]);
+    const [artistPicture, setArtistPicture] = useState<string>('');
     const [loading, setLoading] = useState(true);
-    const [fetchingFull, setFetchingFull] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const playbackState = usePlaybackState();
@@ -159,24 +112,55 @@ const ArtistDetailScreen = ({ navigation, route }: any) => {
             setLoading(true);
             setError(null);
 
-            const searchUrl = `https://api.deezer.com/search?q=${encodeURIComponent(artist || '')}`;
-            const response = await fetch(searchUrl);
-            const json = await response.json();
+            let results: Song[] = [];
+            let artistId: string | null = null;
+            let artistImage: string | null = null;
 
-            if (json.data && json.data.length > 0) {
-                const deezerSongs = json.data.slice(0, 25);
-                setSongs(deezerSongs);
+            // Step 1: Search for the artist to get their ID
+            try {
+                const searchResult = await searchAll(artist || '');
+                const matchedArtist = searchResult.artists?.find(
+                    (a: any) => a.name?.toLowerCase() === (artist || '').toLowerCase()
+                ) || searchResult.artists?.[0];
+                if (matchedArtist) {
+                    artistId = matchedArtist.id;
+                    artistImage = matchedArtist.image;
+                }
+            } catch { /* ignore */ }
 
-                const firstTrack = json.data[0];
-                setArtistData({
-                    id: firstTrack.artist.id,
-                    name: firstTrack.artist.name,
-                    picture_big: firstTrack.artist.picture_medium,
-                    nb_album: 0,
-                    nb_fan: 0,
-                });
+            // Step 2: Get artist details and songs using the ID
+            if (artistId) {
+                try {
+                    const details = await getArtistDetails(artistId);
+                    if (details) {
+                        if (details.image) artistImage = details.image;
+                        if (details.topSongs?.length > 0) results = details.topSongs;
+                    }
+                } catch { /* ignore */ }
 
-                fetchFullTracks(deezerSongs);
+                if (results.length === 0) {
+                    try {
+                        results = await getArtistSongs(artistId);
+                    } catch { /* ignore */ }
+                }
+            }
+
+            // Step 3: Fallback to name search
+            if (results.length === 0) {
+                try {
+                    results = await searchSongsByName(artist || '', 25);
+                } catch { /* ignore */ }
+            }
+
+            // Step 4: Final fallback to local data
+            if (results.length === 0) {
+                results = getSongsByArtist(artist || '');
+            }
+
+            if (artistImage) setArtistPicture(artistImage);
+            if (results.length > 0) {
+                setSongs(results);
+                if (!artistImage && results[0].artwork) setArtistPicture(results[0].artwork);
             } else {
                 setError('No songs found for this artist.');
             }
@@ -188,34 +172,9 @@ const ArtistDetailScreen = ({ navigation, route }: any) => {
         }
     };
 
-    const fetchFullTracks = async (deezerSongs: ApiSong[]) => {
-        setFetchingFull(true);
-        const updated = [...deezerSongs];
-
-        const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
-
-        for (let i = 0; i < deezerSongs.length; i++) {
-            const song = deezerSongs[i];
-            const result = await searchAudius(song.title, song.artist.name);
-            if (result) {
-                updated[i] = { ...updated[i], fullUrl: result.url };
-            }
-            if (i < deezerSongs.length - 1) {
-                await delay(200);
-            }
-        }
-
-        setSongs([...updated]);
-        setFetchingFull(false);
-    };
-
-    const getAudioUrl = (song: ApiSong): string => {
-        return song.fullUrl || song.preview;
-    };
-
-    const playSong = async (song: ApiSong) => {
+    const playSong = async (song: Song) => {
         try {
-            if (activeTrack?.id === String(song.id)) {
+            if (activeTrack?.id === song.id) {
                 if (isPlaying) {
                     await TrackPlayer.pause();
                 } else {
@@ -224,15 +183,7 @@ const ArtistDetailScreen = ({ navigation, route }: any) => {
                 return;
             }
 
-            const track = {
-                id: String(song.id),
-                url: getAudioUrl(song),
-                title: song.title,
-                artist: song.artist.name,
-                album: song.album.title || 'Unknown',
-                duration: song.duration,
-                artwork: song.album.cover_medium || song.artist.picture_medium,
-            };
+            const track = songToTrack(song);
 
             await TrackPlayer.reset();
             await TrackPlayer.add(track);
@@ -241,15 +192,7 @@ const ArtistDetailScreen = ({ navigation, route }: any) => {
             if (error?.code === 'player_already_initialized' || error?.message?.includes('already')) {
                 try {
                     await TrackPlayer.reset();
-                    await TrackPlayer.add({
-                        id: String(song.id),
-                        url: getAudioUrl(song),
-                        title: song.title,
-                        artist: song.artist.name,
-                        album: song.album.title || 'Unknown',
-                        duration: song.duration,
-                        artwork: song.album.cover_medium || song.artist.picture_medium,
-                    });
+                    await TrackPlayer.add(songToTrack(song));
                     await TrackPlayer.play();
                 } catch (innerError) {
                     console.log('Playback retry error:', innerError);
@@ -272,15 +215,7 @@ const ArtistDetailScreen = ({ navigation, route }: any) => {
                 return;
             }
 
-            const tracks = songs.map((song) => ({
-                id: String(song.id),
-                url: getAudioUrl(song),
-                title: song.title,
-                artist: song.artist.name,
-                album: song.album.title || 'Unknown',
-                duration: song.duration,
-                artwork: song.album.cover_medium || song.artist.picture_medium,
-            }));
+            const tracks = songs.map((s) => songToTrack(s));
 
             await TrackPlayer.reset();
             await TrackPlayer.add(tracks);
@@ -289,16 +224,7 @@ const ArtistDetailScreen = ({ navigation, route }: any) => {
             if (error?.code === 'player_already_initialized' || error?.message?.includes('already')) {
                 try {
                     await TrackPlayer.reset();
-                    const tracks = songs.map((song) => ({
-                        id: String(song.id),
-                        url: getAudioUrl(song),
-                        title: song.title,
-                        artist: song.artist.name,
-                        album: song.album.title || 'Unknown',
-                        duration: song.duration,
-                        artwork: song.album.cover_medium || song.artist.picture_medium,
-                    }));
-                    await TrackPlayer.add(tracks);
+                    await TrackPlayer.add(songs.map((s) => songToTrack(s)));
                     await TrackPlayer.play();
                 } catch (innerError) {
                     console.log('Play all retry error:', innerError);
@@ -317,15 +243,7 @@ const ArtistDetailScreen = ({ navigation, route }: any) => {
             }
 
             const shuffled = [...songs].sort(() => Math.random() - 0.5);
-            const tracks = shuffled.map((song) => ({
-                id: String(song.id),
-                url: getAudioUrl(song),
-                title: song.title,
-                artist: song.artist.name,
-                album: song.album.title || 'Unknown',
-                duration: song.duration,
-                artwork: song.album.cover_medium || song.artist.picture_medium,
-            }));
+            const tracks = shuffled.map((s) => songToTrack(s));
 
             await TrackPlayer.reset();
             await TrackPlayer.add(tracks);
@@ -335,16 +253,7 @@ const ArtistDetailScreen = ({ navigation, route }: any) => {
                 try {
                     const shuffled = [...songs].sort(() => Math.random() - 0.5);
                     await TrackPlayer.reset();
-                    const tracks = shuffled.map((song) => ({
-                        id: String(song.id),
-                        url: getAudioUrl(song),
-                        title: song.title,
-                        artist: song.artist.name,
-                        album: song.album.title || 'Unknown',
-                        duration: song.duration,
-                        artwork: song.album.cover_medium || song.artist.picture_medium,
-                    }));
-                    await TrackPlayer.add(tracks);
+                    await TrackPlayer.add(shuffled.map((s) => songToTrack(s)));
                     await TrackPlayer.play();
                 } catch (innerError) {
                     console.log('Shuffle retry error:', innerError);
@@ -355,24 +264,17 @@ const ArtistDetailScreen = ({ navigation, route }: any) => {
         }
     };
 
-    const formatDuration = (seconds: number) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    const renderSongItem = ({ item, index }: { item: ApiSong; index: number }) => {
-        const isActive = activeTrack?.id === String(item.id);
-        const hasFullVersion = !!item.fullUrl;
+    const renderSongItem = ({ item, index }: { item: Song; index: number }) => {
+        const isActive = activeTrack?.id === item.id;
         const playlistData = songs.map((s) => ({
             title: s.title,
-            artist: s.artist.name,
-            artwork: s.album.cover_medium || s.artist.picture_medium,
-            duration: formatDuration(s.duration),
-            likes: 0,
-            album: s.album.title,
-            genre: '',
-            url: getAudioUrl(s),
+            artist: s.artist,
+            artwork: s.artwork || 'https://picsum.photos/seed/song/400',
+            duration: s.duration,
+            likes: s.play_count || 0,
+            album: s.album,
+            genre: s.genre || '',
+            url: s.url,
         }));
 
         return (
@@ -382,13 +284,13 @@ const ArtistDetailScreen = ({ navigation, route }: any) => {
                     navigation.navigate('SongDetail', {
                         song: {
                             title: item.title,
-                            artist: item.artist.name,
-                            artwork: item.album.cover_medium || item.artist.picture_medium,
-                            duration: formatDuration(item.duration),
-                            likes: 0,
-                            album: item.album.title,
-                            genre: '',
-                            url: getAudioUrl(item),
+                            artist: item.artist,
+                            artwork: item.artwork || 'https://picsum.photos/seed/song/400',
+                            duration: item.duration,
+                            likes: item.play_count || 0,
+                            album: item.album,
+                            genre: item.genre || '',
+                            url: item.url,
                         },
                         playlist: playlistData,
                         currentIndex: index,
@@ -397,7 +299,7 @@ const ArtistDetailScreen = ({ navigation, route }: any) => {
                 activeOpacity={0.7}
             >
                 <Image
-                    source={{ uri: item.album.cover_medium }}
+                    source={{ uri: item.artwork || 'https://picsum.photos/seed/song/200' }}
                     style={styles.songCover}
                 />
                 <View style={styles.songInfo}>
@@ -408,18 +310,13 @@ const ArtistDetailScreen = ({ navigation, route }: any) => {
                     </View>
                     <View style={styles.songMetaRow}>
                         <Text style={styles.songAlbum} numberOfLines={1}>
-                            {item.album.title}
+                            {item.album}
                         </Text>
-                        {!hasFullVersion && !fetchingFull && (
-                            <View style={styles.previewBadge}>
-                                <Text style={styles.previewBadgeText}>PREVIEW</Text>
-                            </View>
-                        )}
                     </View>
                 </View>
                 <View style={styles.songRight}>
                     {isActive && isPlaying && <Equalizer isActive={isActive} isPlaying={isPlaying} />}
-                    <Text style={styles.songDuration}>{formatDuration(item.duration)}</Text>
+                    <Text style={styles.songDuration}>{item.duration}</Text>
                     <TouchableOpacity
                         style={styles.playButton}
                         onPress={() => playSong(item)}
@@ -491,26 +388,19 @@ const ArtistDetailScreen = ({ navigation, route }: any) => {
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
                 <View style={styles.artistInfoContainer}>
-                    {artistData?.picture_big ? (
-                        <Image source={{ uri: artistData.picture_big }} style={styles.artistImage} />
+                    {artistPicture ? (
+                        <Image source={{ uri: artistPicture }} style={styles.artistImage} />
                     ) : (
                         <View style={styles.artistImageContainer}>
                             <Icon name="person" size={70} color="#1DB954" />
                         </View>
                     )}
 
-                    <Text style={styles.artistName}>{artistData?.name || artist}</Text>
+                    <Text style={styles.artistName}>{artist}</Text>
 
                     <Text style={styles.artistListeners}>
                         {songs.length} tracks found
                     </Text>
-
-                    {fetchingFull && (
-                        <View style={styles.fetchingBanner}>
-                            <ActivityIndicator size="small" color="#1DB954" />
-                            <Text style={styles.fetchingText}>Finding full tracks...</Text>
-                        </View>
-                    )}
 
                     <View style={styles.actionButtons}>
                         <TouchableOpacity style={styles.shuffleButton} onPress={shufflePlay}>

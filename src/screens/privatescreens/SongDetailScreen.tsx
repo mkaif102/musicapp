@@ -573,6 +573,7 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     songArtist: {
+        textAlign: 'center',
         color: '#B3B3B3',
         fontSize: 16,
         fontWeight: '400',

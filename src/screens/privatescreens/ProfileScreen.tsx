@@ -13,8 +13,10 @@ import {
     PermissionsAndroid,
     Linking,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useAuth } from '../../context/AuthContext';
 import {
     launchCamera,
@@ -23,8 +25,10 @@ import {
     ImagePickerResponse,
     ImageLibraryOptions,
 } from 'react-native-image-picker';
+import { colors } from '../../theme/Colors';
 
 const ProfileScreen = ({ navigation }: any) => {
+    const insets = useSafeAreaInsets();
     const { logout, userData: authUserData } = useAuth();
     const [profileImage, setProfileImage] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
@@ -227,9 +231,11 @@ const ProfileScreen = ({ navigation }: any) => {
                     style: 'destructive',
                     onPress: async () => {
                         try {
+                            await GoogleSignin.signOut();
                             await logout();
                         } catch (error) {
                             console.log('Logout error:', error);
+                            Alert.alert('Error', 'Failed to logout. Please try again.');
                         }
                     },
                 },
@@ -248,30 +254,29 @@ const ProfileScreen = ({ navigation }: any) => {
 
     const menuItems = [
         { id: '1', icon: 'person-outline', label: 'Edit Profile', screen: 'EditProfile' },
-        { id: '2', icon: 'heart-outline', label: 'Favorites', screen: 'Favorites' },
-        { id: '3', icon: 'list-outline', label: 'My Playlists', screen: 'MyPlaylists' },
-        { id: '4', icon: 'time-outline', label: 'Listening History', screen: 'RecentlyPlayed' },
-        { id: '5', icon: 'settings-outline', label: 'Settings', screen: 'Settings' },
-        { id: '6', icon: 'help-circle-outline', label: 'Help & Support', screen: 'HelpCenter' },
+        { id: '2', icon: 'list-outline', label: 'My Playlists', screen: 'MyPlaylists' },
+        { id: '3', icon: 'time-outline', label: 'Listening History', screen: 'RecentlyPlayed' },
+        { id: '4', icon: 'settings-outline', label: 'Settings', screen: 'Settings' },
+        // { id: '5', icon: 'help-circle-outline', label: 'Help & Support', screen: 'HelpCenter' },
     ];
 
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="#0A0A0A" />
 
-            <View style={styles.header}>
+            <View style={[styles.header, { marginTop: insets.top }]}>
                 <Text style={styles.headerTitle}>Profile</Text>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-                <View style={styles.banner}>
+                {/* <View style={styles.banner}>
                     <View style={styles.bannerOverlay} />
-                </View>
+                </View> */}
 
                 <View style={styles.avatarSection}>
                     <TouchableOpacity style={styles.avatarWrapper} onPress={handleSelectImage} activeOpacity={0.8}>
-                        {profileImage ? (
-                            <Image source={{ uri: profileImage }} style={styles.avatar} />
+                        {(profileImage || authUserData?.image) ? (
+                            <Image source={{ uri: profileImage || authUserData?.image }} style={styles.avatar} />
                         ) : (
                             <View style={styles.avatarFallback}>
                                 <Text style={styles.avatarInitials}>{getInitials(userData.name)}</Text>
@@ -289,10 +294,10 @@ const ProfileScreen = ({ navigation }: any) => {
 
                     <Text style={styles.userName}>{userData.name}</Text>
                     <Text style={styles.userHandle}>@{userData.name.toLowerCase().replace(/\s+/g, '')}</Text>
-                    <Text style={styles.joinDate}>{userData.joinDate}</Text>
+                    {/* <Text style={styles.joinDate}>{userData.joinDate}</Text> */}
                 </View>
 
-                <View style={styles.statsRow}>
+                {/* <View style={styles.statsRow}>
                     <TouchableOpacity style={styles.statItem}>
                         <Text style={styles.statValue}>{userData.followers}</Text>
                         <Text style={styles.statLabel}>Followers</Text>
@@ -307,16 +312,16 @@ const ProfileScreen = ({ navigation }: any) => {
                         <Text style={styles.statValue}>{userData.tracks}</Text>
                         <Text style={styles.statLabel}>Playlists</Text>
                     </TouchableOpacity>
-                </View>
+                </View> */}
 
                 <View style={styles.actionsRow}>
                     <TouchableOpacity style={styles.primaryAction} activeOpacity={0.7} onPress={() => navigation.navigate('EditProfile')}>
                         <Icon name="create-outline" size={18} color="#FFFFFF" />
                         <Text style={styles.primaryActionText}>Edit Profile</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.secondaryAction} activeOpacity={0.7} onPress={() => navigation.navigate('Settings')}>
+                    {/* <TouchableOpacity style={styles.secondaryAction} activeOpacity={0.7} onPress={() => navigation.navigate('Settings')}>
                         <Icon name="settings-outline" size={18} color="#FFFFFF" />
-                    </TouchableOpacity>
+                    </TouchableOpacity> */}
                 </View>
 
                 <View style={styles.menuGroup}>
@@ -356,12 +361,12 @@ const styles = StyleSheet.create({
         backgroundColor: '#0A0A0A',
     },
     header: {
-        marginTop: 50,
         paddingHorizontal: 20,
         paddingVertical: 16,
     },
     headerTitle: {
-        color: '#FFFFFF',
+        textAlign: 'center',
+        color: colors.white,
         fontSize: 24,
         fontWeight: '700',
     },
@@ -379,7 +384,7 @@ const styles = StyleSheet.create({
     },
     avatarSection: {
         alignItems: 'center',
-        marginTop: -50,
+        marginTop: 30,
         paddingHorizontal: 20,
     },
     avatarWrapper: {

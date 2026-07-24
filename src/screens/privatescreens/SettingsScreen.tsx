@@ -91,7 +91,7 @@ const SettingsScreen = ({ navigation }: any) => {
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={styles.scrollContent}
                 >
-                    <View style={styles.profileCard}>
+                    {/* <View style={styles.profileCard}>
                         <View style={styles.avatar}>
                             <Text style={styles.avatarText}>{getInitials(userName)}</Text>
                         </View>
@@ -106,11 +106,11 @@ const SettingsScreen = ({ navigation }: any) => {
                         >
                             <Icon name="create-outline" size={18} color="#1DB954" />
                         </TouchableOpacity>
-                    </View>
+                    </View> */}
 
-                    <View style={styles.divider} />
+                    {/* <View style={styles.divider} /> */}
 
-                    <Text style={styles.sectionLabel}>ACCOUNT</Text>
+                    {/* <Text style={styles.sectionLabel}>ACCOUNT</Text>
                     <View style={styles.listGroup}>
                         <TouchableOpacity style={styles.listItem} activeOpacity={0.6} onPress={() => Alert.alert('Coming Soon', 'Subscription management coming soon.')}>
                             <Icon name="card-outline" size={22} color="#B3B3B3" />
@@ -123,7 +123,7 @@ const SettingsScreen = ({ navigation }: any) => {
                             <Text style={styles.listItemText}>Storage & Data</Text>
                             <Icon name="chevron-forward" size={20} color="#555" />
                         </TouchableOpacity>
-                    </View>
+                    </View> */}
 
                     <Text style={styles.sectionLabel}>PREFERENCES</Text>
                     <View style={styles.listGroup}>

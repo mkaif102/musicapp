@@ -1,5 +1,5 @@
 // src/navigation/AppNavigation.tsx
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -78,8 +78,9 @@ const MainTabs = () => {
     );
 };
 
-const AuthNavigator = () => (
+const AuthNavigator = ({ initialRoute = 'Splash' }: { initialRoute?: string }) => (
     <AuthStack.Navigator
+        initialRouteName={initialRoute}
         screenOptions={{
             headerShown: false,
             animation: 'slide_from_right',
@@ -124,14 +125,21 @@ const LoggedInNavigator = () => (
 
 const AppNavigation = () => {
     const { isLoggedIn, loading } = useAuth();
+    const wasLoggedIn = useRef(isLoggedIn);
+
+    useEffect(() => {
+        wasLoggedIn.current = isLoggedIn;
+    }, [isLoggedIn]);
 
     if (loading) {
         return null;
     }
 
+    const initialRoute = wasLoggedIn.current ? 'Login' : 'Splash';
+
     return (
         <View style={{ flex: 1 }}>
-            {isLoggedIn ? <LoggedInNavigator key="loggedIn" /> : <AuthNavigator key="auth" />}
+            {isLoggedIn ? <LoggedInNavigator key="loggedIn" /> : <AuthNavigator key="auth" initialRoute={initialRoute} />}
         </View>
     );
 };

@@ -297,8 +297,8 @@ const EditProfileScreen = ({ navigation, route }: any) => {
 
                 <View style={styles.avatarSection}>
                     <View style={styles.avatarContainer}>
-                        {profileImage ? (
-                            <Image source={{ uri: profileImage }} style={styles.avatarImage} />
+                        {(profileImage || authUserData?.image) ? (
+                            <Image source={{ uri: profileImage || authUserData?.image }} style={styles.avatarImage} />
                         ) : (
                             <Text style={styles.avatarText}>{getInitials(name)}</Text>
                         )}

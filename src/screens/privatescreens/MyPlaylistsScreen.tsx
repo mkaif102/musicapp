@@ -20,55 +20,11 @@ import TrackPlayer, { State, usePlaybackState, useActiveTrack } from 'react-nati
 import { colors } from '../../theme/Colors';
 import { useFocusEffect } from '@react-navigation/native';
 import { saveToRecentlyPlayed } from '../../utils/recentlyPlayed';
+import { searchSongsByName } from '../../services/jiosaavn';
+import { parseDuration, getAllSongs, getSongsByGenre, getSongsByMood } from '../../data/songs';
+import type { Song } from '../../data/songs';
 
 const { width } = Dimensions.get('window');
-
-interface DeezerTrack {
-    id: number;
-    title: string;
-    duration: number;
-    artist: { name: string };
-    album: { title: string; cover_medium: string };
-    preview: string;
-}
-
-interface Song {
-    id: string;
-    title: string;
-    artist: string;
-    album: string;
-    duration: string;
-    url: string;
-    artwork: string;
-}
-
-const fetchDeezerSongs = async (query: string, limit: number = 10): Promise<Song[]> => {
-    try {
-        const response = await fetch(
-            `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=${limit}`
-        );
-        const data = await response.json();
-        if (!data.data) return [];
-        return data.data.map((track: DeezerTrack) => ({
-            id: String(track.id),
-            title: track.title,
-            artist: track.artist.name,
-            album: track.album.title,
-            duration: `${Math.floor(track.duration / 60)}:${String(track.duration % 60).padStart(2, '0')}`,
-            url: track.preview,
-            artwork: track.album.cover_medium,
-        }));
-    } catch {
-        return [];
-    }
-};
-
-const parseDuration = (d: string): number => {
-    const parts = String(d || '0:00').split(':').map(Number);
-    if (parts.length === 2) return parts[0] * 60 + parts[1];
-    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-    return 0;
-};
 
 const MyPlaylistsScreen = ({ navigation }: any) => {
     const [searchQuery, setSearchQuery] = useState('');
@@ -80,38 +36,53 @@ const MyPlaylistsScreen = ({ navigation }: any) => {
     const activeTrack = useActiveTrack();
     const isPlaying = playbackState?.state === State.Playing;
 
-    const [audiusSongs, setAudiusSongs] = useState<Song[]>([]);
-    const [pakistaniSongs, setPakistaniSongs] = useState<Song[]>([]);
+    const [allLocalSongs, setAllLocalSongs] = useState<Song[]>([]);
+    const [topHitsSongs, setTopHitsSongs] = useState<Song[]>([]);
+    const [electronicSongs, setElectronicSongs] = useState<Song[]>([]);
+    const [chillSongs, setChillSongs] = useState<Song[]>([]);
+    const [workoutSongs, setWorkoutSongs] = useState<Song[]>([]);
+    const [trendingSongs, setTrendingSongs] = useState<Song[]>([]);
+    const [arijitSongs, setArijitSongs] = useState<Song[]>([]);
     const [talhaSongs, setTalhaSongs] = useState<Song[]>([]);
     const [hasanSongs, setHasanSongs] = useState<Song[]>([]);
     const [talwinderSongs, setTalwinderSongs] = useState<Song[]>([]);
-    const [trendingSongs, setTrendingSongs] = useState<Song[]>([]);
+    const [kkSongs, setKkSongs] = useState<Song[]>([]);
 
     useEffect(() => {
         const loadAllSongs = async () => {
             setLoading(true);
-            const [audius, pakistani, talha, hasan, talwinder, trending] = await Promise.all([
-                fetchDeezerSongs('top hits', 10),
-                fetchDeezerSongs('pakistani music', 10),
-                fetchDeezerSongs('Talha Anjum', 10),
-                fetchDeezerSongs('Hasan Raheem', 10),
-                fetchDeezerSongs('Talwinder', 10),
-                fetchDeezerSongs('popular', 10),
+            const local = getAllSongs();
+            setAllLocalSongs(local);
+
+            const [apiTopHits, apiElectronic, apiChill, apiWorkout, apiTrending] = await Promise.all([
+                searchSongsByName('top hits', 10),
+                searchSongsByName('electronic', 10),
+                searchSongsByName('chill', 10),
+                searchSongsByName('workout', 10),
+                searchSongsByName('popular', 10),
             ]);
-            setAudiusSongs(audius);
-            setPakistaniSongs(pakistani);
-            setTalhaSongs(talha);
-            setHasanSongs(hasan);
-            setTalwinderSongs(talwinder);
-            setTrendingSongs(trending);
+
+            setTopHitsSongs(apiTopHits.length > 0 ? apiTopHits : local);
+            setElectronicSongs(apiElectronic.length > 0 ? apiElectronic : getSongsByGenre('Electronic'));
+            setChillSongs(apiChill.length > 0 ? apiChill : [...getSongsByGenre('Ambient'), ...getSongsByGenre('Lofi')]);
+            setWorkoutSongs(apiWorkout.length > 0 ? apiWorkout : getSongsByMood('Energizing'));
+            setTrendingSongs(apiTrending.length > 0 ? apiTrending : local.slice(0, 10));
+            const [apiArijit, apiTalha, apiHasan, apiTalwinder, apiKK] = await Promise.all([
+                searchSongsByName('Arijit Singh', 10),
+                searchSongsByName('Talha Anjum', 10),
+                searchSongsByName('Hasan Raheem', 10),
+                searchSongsByName('Talwinder', 10),
+                searchSongsByName('KK singer', 10),
+            ]);
+            setArijitSongs(apiArijit.length > 0 ? apiArijit : []);
+            setTalhaSongs(apiTalha.length > 0 ? apiTalha : []);
+            setHasanSongs(apiHasan.length > 0 ? apiHasan : []);
+            setTalwinderSongs(apiTalwinder.length > 0 ? apiTalwinder : []);
+            setKkSongs(apiKK.length > 0 ? apiKK : []);
             setLoading(false);
         };
         loadAllSongs();
     }, []);
-
-    const allSongs = useMemo(() => {
-        return [...audiusSongs, ...pakistaniSongs, ...talhaSongs, ...hasanSongs, ...talwinderSongs, ...trendingSongs];
-    }, [audiusSongs, pakistaniSongs, talhaSongs, hasanSongs, talwinderSongs, trendingSongs]);
 
     function calculateTotalDuration(songs: Song[]): string {
         let totalSeconds = 0;
@@ -123,92 +94,142 @@ const MyPlaylistsScreen = ({ navigation }: any) => {
                 totalSeconds += parts[0] * 3600 + parts[1] * 60 + parts[2];
             }
         });
-
         const hours = Math.floor(totalSeconds / 3600);
         const minutes = Math.floor((totalSeconds % 3600) / 60);
-
-        if (hours > 0) {
-            return `${hours}h ${minutes}min`;
-        } else {
-            return `${minutes}min`;
-        }
+        if (hours > 0) return `${hours}h ${minutes}min`;
+        return `${minutes}min`;
     }
 
     const songLibrary: { [key: string]: Song[] } = useMemo(() => {
         return {
-            'Audius Hits': audiusSongs,
-            'Pakistani Vibes': pakistaniSongs,
+            'Top Hits': topHitsSongs,
+            'Electronic Vibes': electronicSongs,
+            'Chill & Relax': chillSongs,
+            'Workout Energy': workoutSongs,
+            'Recently Played': trendingSongs,
+            'All Songs': allLocalSongs,
+            'Arijit Singh': arijitSongs,
             'Talha Anjum': talhaSongs,
             'Hasan Raheem': hasanSongs,
             'Talwinder': talwinderSongs,
-            'Recently Played': trendingSongs,
+            'KK': kkSongs,
         };
-    }, [audiusSongs, pakistaniSongs, talhaSongs, hasanSongs, talwinderSongs, trendingSongs]);
+    }, [topHitsSongs, electronicSongs, chillSongs, workoutSongs, trendingSongs, allLocalSongs, arijitSongs, talhaSongs, hasanSongs, talwinderSongs, kkSongs]);
 
     const playlists = useMemo(() => {
         return [
             {
                 id: '1',
-                name: 'Audius Hits',
-                songCount: audiusSongs.length,
-                duration: calculateTotalDuration(audiusSongs),
+                name: 'Top Hits',
+                songCount: topHitsSongs.length,
+                duration: calculateTotalDuration(topHitsSongs),
                 color: '#1DB954',
                 isPublic: true,
                 likes: 1247,
-                description: 'Top tracks from Deezer platform',
+                description: 'Top tracks from JioSaavn',
             },
             {
                 id: '2',
-                name: 'Pakistani Vibes',
-                songCount: pakistaniSongs.length,
-                duration: calculateTotalDuration(pakistaniSongs),
-                color: '#1DB954',
+                name: 'Arijit Singh',
+                songCount: arijitSongs.length,
+                duration: calculateTotalDuration(arijitSongs),
+                color: '#FF6B6B',
                 isPublic: true,
-                likes: 892,
-                description: 'Best of Pakistani music',
+                likes: 2500,
+                description: 'Romantic hits by Arijit Singh',
             },
             {
                 id: '3',
                 name: 'Talha Anjum',
                 songCount: talhaSongs.length,
                 duration: calculateTotalDuration(talhaSongs),
-                color: '#1DB954',
+                color: '#6C63FF',
                 isPublic: true,
-                likes: 1567,
-                description: 'Talha Anjum hits collection',
+                likes: 1800,
+                description: 'Hip-hop bars by Talha Anjum',
             },
             {
                 id: '4',
                 name: 'Hasan Raheem',
                 songCount: hasanSongs.length,
                 duration: calculateTotalDuration(hasanSongs),
-                color: '#1DB954',
-                isPublic: false,
-                likes: 734,
-                description: 'Soulful tracks by Hasan Raheem',
+                color: '#4ECDC4',
+                isPublic: true,
+                likes: 1600,
+                description: 'Smooth pop by Hasan Raheem',
             },
             {
                 id: '5',
                 name: 'Talwinder',
                 songCount: talwinderSongs.length,
                 duration: calculateTotalDuration(talwinderSongs),
-                color: '#1DB954',
+                color: '#FFA07A',
                 isPublic: true,
-                likes: 523,
-                description: 'Smooth vibes by Talwinder',
+                likes: 1400,
+                description: 'Vibes by Talwinder',
             },
             {
                 id: '6',
+                name: 'KK',
+                songCount: kkSongs.length,
+                duration: calculateTotalDuration(kkSongs),
+                color: '#FFD93D',
+                isPublic: true,
+                likes: 3000,
+                description: 'Legendary hits by KK',
+            },
+            {
+                id: '7',
+                name: 'Electronic Vibes',
+                songCount: electronicSongs.length,
+                duration: calculateTotalDuration(electronicSongs),
+                color: '#1DB954',
+                isPublic: true,
+                likes: 892,
+                description: 'Best electronic & synth tracks',
+            },
+            {
+                id: '8',
+                name: 'Chill & Relax',
+                songCount: chillSongs.length,
+                duration: calculateTotalDuration(chillSongs),
+                color: '#4ECDC4',
+                isPublic: true,
+                likes: 1567,
+                description: 'Ambient & lofi for relaxation',
+            },
+            {
+                id: '9',
+                name: 'Workout Energy',
+                songCount: workoutSongs.length,
+                duration: calculateTotalDuration(workoutSongs),
+                color: '#FF6B6B',
+                isPublic: true,
+                likes: 734,
+                description: 'High-energy tracks to fuel your workout',
+            },
+            {
+                id: '10',
                 name: 'Recently Played',
                 songCount: trendingSongs.length,
                 duration: calculateTotalDuration(trendingSongs),
-                color: '#1DB954',
+                color: '#FFA07A',
                 isPublic: false,
-                likes: 345,
+                likes: 523,
                 description: 'Your recently played tracks',
             },
+            {
+                id: '11',
+                name: 'All Songs',
+                songCount: allLocalSongs.length,
+                duration: calculateTotalDuration(allLocalSongs),
+                color: '#FFD93D',
+                isPublic: false,
+                likes: 345,
+                description: 'Full song library',
+            },
         ];
-    }, [audiusSongs, pakistaniSongs, talhaSongs, hasanSongs, talwinderSongs, trendingSongs]);
+    }, [topHitsSongs, electronicSongs, chillSongs, workoutSongs, trendingSongs, allLocalSongs, arijitSongs, talhaSongs, hasanSongs, talwinderSongs, kkSongs]);
 
     const [selectedFilter, setSelectedFilter] = useState('All');
 
@@ -392,6 +413,15 @@ const MyPlaylistsScreen = ({ navigation }: any) => {
 
             <View style={styles.container}>
                 <View style={styles.header}>
+                    {/* {navigation.canGoBack() && (
+                        <TouchableOpacity
+                            onPress={() => navigation.goBack()}
+                            style={styles.backButton}
+                            activeOpacity={0.7}
+                        >
+                            <Icon name="arrow-back" size={24} color="#ffffff" />
+                        </TouchableOpacity>
+                    )} */}
                     <Text style={styles.headerTitle}>Your Library</Text>
                     <TouchableOpacity style={styles.headerButton} onPress={handleCreatePlaylist}>
                         <Icon name="add" size={24} color="#FFFFFF" />
@@ -597,11 +627,21 @@ const styles = StyleSheet.create({
         paddingTop: 8,
         paddingBottom: 16,
     },
+    backButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: '#1A1A1A',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     headerTitle: {
         fontSize: 24,
         fontWeight: '800',
         color: '#FFFFFF',
         letterSpacing: -0.3,
+        flex: 1,
+        textAlign: 'center',
     },
     headerButton: {
         width: 36,

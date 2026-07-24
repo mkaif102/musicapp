@@ -73,7 +73,7 @@ const FavoritesScreen = ({ navigation }: any) => {
                     </View>
                     <View style={styles.statDivider} />
                     <View style={styles.statItem}>
-                        <Text style={styles.statNumber}>Audius</Text>
+                        <Text style={styles.statNumber}>JioSaavn</Text>
                         <Text style={styles.statLabel}>Source</Text>
                     </View>
                 </View>

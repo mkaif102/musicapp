@@ -28,14 +28,17 @@ import {
     getSongByName,
 } from '../../data/songs';
 import { saveToRecentlyPlayed } from '../../utils/recentlyPlayed';
+import { searchSongsByName } from '../../services/jiosaavn';
 
+// Track shape returned from our service (matches Song interface)
 interface ApiSong {
-    id: number;
+    id: string;
     title: string;
-    duration: number;
-    preview: string;
-    artist: { id: number; name: string; picture_medium: string };
-    album: { id: number; title: string; cover_medium: string };
+    artist: string;
+    album: string;
+    duration: string;
+    url: string;
+    artwork?: string;
 }
 
 const SearchScreen = ({ navigation }: any) => {
@@ -45,7 +48,7 @@ const SearchScreen = ({ navigation }: any) => {
     const [recentSearches, setRecentSearches] = useState<string[]>([]);
     const [apiSearchResults, setApiSearchResults] = useState<ApiSong[]>([]);
     const [apiLoading, setApiLoading] = useState(false);
-    const [currentPlayingId, setCurrentPlayingId] = useState<number | null>(null);
+    const [currentPlayingId, setCurrentPlayingId] = useState<string | number | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -156,22 +159,10 @@ const SearchScreen = ({ navigation }: any) => {
         }
         try {
             setApiLoading(true);
-            const response = await fetch(
-                `https://api.deezer.com/search?q=${encodeURIComponent(query)}`
-            );
-            const json = await response.json();
-            if (json.data && json.data.length > 0) {
-                const lowerQuery = query.toLowerCase();
-                const filtered = json.data.filter((song: ApiSong) =>
-                    song.title.toLowerCase() === lowerQuery ||
-                    song.artist.name.toLowerCase() === lowerQuery
-                );
-                setApiSearchResults(filtered.slice(0, 25));
-            } else {
-                setApiSearchResults([]);
-            }
+            const results = await searchSongsByName(query, 20);
+            setApiSearchResults(results as ApiSong[]);
         } catch (err) {
-            console.log('API search error:', err);
+            console.log('JioSaavn search error:', err);
             setApiSearchResults([]);
         } finally {
             setApiLoading(false);
@@ -199,13 +190,13 @@ const SearchScreen = ({ navigation }: any) => {
                 }
 
                 const track = {
-                    id: String(song.id),
-                    url: song.preview,
+                    id: song.id,
+                    url: song.url,
                     title: song.title,
-                    artist: song.artist.name,
-                    album: song.album.title || 'Unknown',
+                    artist: song.artist,
+                    album: song.album || 'Unknown',
                     duration: song.duration,
-                    artwork: song.album.cover_medium || song.artist.picture_medium,
+                    artwork: song.artwork || 'https://picsum.photos/seed/music/300',
                 };
 
                 await TrackPlayer.reset();
@@ -214,13 +205,13 @@ const SearchScreen = ({ navigation }: any) => {
                 setCurrentPlayingId(song.id);
                 setIsPlaying(true);
                 saveToRecentlyPlayed({
-                    id: String(song.id),
+                    id: song.id,
                     title: song.title,
-                    artist: song.artist.name,
-                    album: song.album.title || 'Unknown',
-                    duration: formatDuration(song.duration),
-                    url: song.preview,
-                    artwork: song.album.cover_medium || song.artist.picture_medium,
+                    artist: song.artist,
+                    album: song.album || 'Unknown',
+                    duration: song.duration,
+                    url: song.url,
+                    artwork: song.artwork || 'https://picsum.photos/seed/music/300',
                 });
             } else {
                 const fullSong = getSongByName(song.title);
@@ -248,13 +239,13 @@ const SearchScreen = ({ navigation }: any) => {
                     await TrackPlayer.reset();
                     if (isApiSong) {
                         await TrackPlayer.add({
-                            id: String(song.id),
-                            url: song.preview,
+                            id: song.id,
+                            url: song.url,
                             title: song.title,
-                            artist: song.artist.name,
-                            album: song.album.title || 'Unknown',
+                            artist: song.artist,
+                            album: song.album || 'Unknown',
                             duration: song.duration,
-                            artwork: song.album.cover_medium || song.artist.picture_medium,
+                            artwork: song.artwork || 'https://picsum.photos/seed/music/300',
                         });
                         setCurrentPlayingId(song.id);
                     } else {
@@ -279,17 +270,18 @@ const SearchScreen = ({ navigation }: any) => {
     const renderResultItem = ({ item, index }: { item: any; index: number }) => {
         if (item.type === 'api_song') {
             const isActive = currentPlayingId === item.id;
+            // Build playlist data from all API songs for queue navigation
             const playlistData = combinedResults
                 .filter((r: any) => r.type === 'api_song')
                 .map((s: any) => ({
                     title: s.title,
-                    artist: s.artist.name,
-                    artwork: s.album.cover_medium || s.artist.picture_medium,
-                    duration: formatDuration(s.duration),
+                    artist: s.artist,
+                    artwork: s.artwork || 'https://picsum.photos/seed/music/300',
+                    duration: s.duration,
                     likes: 0,
-                    album: s.album.title,
+                    album: s.album,
                     genre: '',
-                    url: s.preview,
+                    url: s.url,
                 }));
             const songIndex = combinedResults
                 .filter((r: any) => r.type === 'api_song')
@@ -301,13 +293,13 @@ const SearchScreen = ({ navigation }: any) => {
                         navigation.navigate('SongDetail', {
                             song: {
                                 title: item.title,
-                                artist: item.artist.name,
-                                artwork: item.album.cover_medium || item.artist.picture_medium,
-                                duration: formatDuration(item.duration),
+                                artist: item.artist,
+                                artwork: item.artwork || 'https://picsum.photos/seed/music/300',
+                                duration: item.duration,
                                 likes: 0,
-                                album: item.album.title,
+                                album: item.album,
                                 genre: '',
-                                url: item.preview,
+                                url: item.url,
                             },
                             playlist: playlistData,
                             currentIndex: songIndex >= 0 ? songIndex : 0,
@@ -316,7 +308,7 @@ const SearchScreen = ({ navigation }: any) => {
                     activeOpacity={0.7}
                 >
                     <Image
-                        source={{ uri: item.album.cover_medium }}
+                        source={{ uri: item.artwork || 'https://picsum.photos/seed/music/300' }}
                         style={styles.apiSongCover}
                     />
                     <View style={styles.resultInfo}>
@@ -324,11 +316,11 @@ const SearchScreen = ({ navigation }: any) => {
                             {item.title}
                         </Text>
                         <Text style={styles.resultSubtitle} numberOfLines={1}>
-                            {item.artist.name} • {item.album.title}
+                            {item.artist} {item.album && item.album !== 'Unknown Album' ? `• ${item.album}` : ''}
                         </Text>
                     </View>
                     <View style={styles.resultRight}>
-                        <Text style={styles.apiSongDuration}>{formatDuration(item.duration)}</Text>
+                        <Text style={styles.apiSongDuration}>{item.duration}</Text>
                         <TouchableOpacity
                             style={styles.playButton}
                             onPress={() => playSong(item, true)}

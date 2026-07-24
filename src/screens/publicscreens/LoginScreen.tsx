@@ -71,9 +71,11 @@ const LoginScreen = ({ navigation }: { navigation: any }) => {
 
             const response = await GoogleSignin.signIn();
 
-            console.log("Google Response:", JSON.stringify(response, null, 2));
+            console.log("Google Response:", response);
 
-            if (response.type !== 'success' || !response.data?.user?.email) {
+            const user = response.data?.user;
+
+            if (!user?.email) {
                 Alert.alert(
                     "Google Login Failed",
                     "No user data received"
@@ -82,35 +84,22 @@ const LoginScreen = ({ navigation }: { navigation: any }) => {
             }
 
             const userData = {
-                userName: response.data.user.name || "Google User",
-                userEmail: response.data.user.email,
-                image: response.data.user.photo || "",
+                userName: user.name || "Google User",
+                userEmail: user.email,
+                image: user.photo || "",
                 loginTime: new Date().toISOString(),
             };
 
             await login(userData);
 
         } catch (error: any) {
-            console.log("Google Login Error:", JSON.stringify(error, null, 2));
+            console.log("Google Login Error Code:", error.code);
+            console.log("Google Login Error:", error);
 
-            let errorMsg = error.message || "Something went wrong";
-
-            if (error.code) {
-                switch (error.code) {
-                    case 'SIGN_IN_CANCELLED':
-                        return;
-                    case 'IN_PROGRESS':
-                        errorMsg = "Sign in already in progress";
-                        break;
-                    case 'PLAY_SERVICES_NOT_AVAILABLE':
-                        errorMsg = "Google Play Services not available. Please update.";
-                        break;
-                    default:
-                        errorMsg = `Error (${error.code}): ${error.message}`;
-                }
-            }
-
-            Alert.alert("Google Login Failed", errorMsg);
+            Alert.alert(
+                "Google Login Failed",
+                error.message || "Something went wrong"
+            );
         }
     };
     const validateForm = () => {
@@ -224,7 +213,6 @@ const LoginScreen = ({ navigation }: { navigation: any }) => {
                             }
                         ]}
                     >
-                        {/* Music Note Decorations */}
                         <View style={styles.decorationContainer}>
                             <Animated.View style={[styles.musicNote, styles.note1]}>
                                 <Icon name="musical-note" size={24} color="rgba(29, 185, 84, 0.3)" />
@@ -237,7 +225,6 @@ const LoginScreen = ({ navigation }: { navigation: any }) => {
                             </Animated.View>
                         </View>
 
-                        {/* Logo Section */}
                         <View style={styles.logoContainer}>
                             <View style={styles.logoCircle}>
                                 <Icon name="musical-notes" size={40} color="#1DB954" />
@@ -360,9 +347,9 @@ const LoginScreen = ({ navigation }: { navigation: any }) => {
                                 <TouchableOpacity style={styles.socialButton} activeOpacity={0.7}>
                                     <Icon name="logo-apple" size={24} color="#fff" />
                                 </TouchableOpacity>
-                                <TouchableOpacity style={styles.socialButton} activeOpacity={0.7}>
+                                {/* <TouchableOpacity style={styles.socialButton} activeOpacity={0.7}>
                                     <Icon name="logo-facebook" size={24} color="#fff" />
-                                </TouchableOpacity>
+                                </TouchableOpacity> */}
                             </View>
 
                             <View style={styles.signUpContainer}>

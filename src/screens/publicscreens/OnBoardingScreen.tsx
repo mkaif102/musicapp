@@ -9,11 +9,11 @@ import {
     Dimensions,
     FlatList,
     Animated,
-    SafeAreaView,
     ImageBackground,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { colors } from '../../theme/Colors';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
 
@@ -287,6 +287,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255,255,255,0.1)',
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.15)',
+        marginBottom: 50
     },
     skipText: {
         color: colors.white,
@@ -302,6 +303,7 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         flex: 1,
         gap: 8,
+        marginBottom: 50
     },
     nextText: {
         color: '#121212',

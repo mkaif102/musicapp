@@ -1,4 +1,11 @@
-import songsJson from './songs.json';
+/**
+ * songs.ts — Central song data and utility functions
+ *
+ * This file provides CC-licensed fallback songs used when the JioSaavn API is unavailable.
+ * This file replaces the old songs.json import.
+ * Every function here works the same as before — screens don't need to change
+ * how they call these functions, only the underlying data has changed.
+ */
 
 export interface Song {
     id: string;
@@ -18,88 +25,133 @@ export interface Song {
     musical_key?: string;
 }
 
-const albumGenreMap: { [key: string]: string } = {
-    'Afsanay': 'Hip-Hop',
-    'Gumaan': 'Hip-Hop',
-    'Downers At Dusk': 'Hip-Hop',
-    'Pain Killers': 'Hip-Hop',
-    'Kya Tumhe Pata Hai': 'Pop',
-    'Aisay Kaisay': 'Pop',
-    'Woh': 'Pop',
-    'Mann': 'Pop',
-    'Sukoon': 'Pop',
-    'Sad Vibes': 'Sad',
-    'Romantic Urdu': 'Romantic',
-    'Hip-Hop Energy': 'Hip-Hop',
-    'Chill Lofi': 'Lofi',
-    'Party Mix': 'Party',
-    'Oceans': 'Ambient',
-    'Sunsets': 'Lofi',
-    'Energy': 'Workout',
-    'Iron': 'Workout',
-    'Power': 'Workout',
-    'Focus': 'Focus',
-    'Zen': 'Meditation',
-    'Library': 'Lofi',
-    'Party': 'Party',
-    'Bass': 'Electronic',
-    'Rain': 'Ambient',
-    'Night': 'Ambient',
-    'Soft': 'Classical',
-    'Roads': 'Pop',
-    'Summer': 'Pop',
-    'Journey': 'Pop',
-};
-
-const albumMoodMap: { [key: string]: string } = {
-    'Afsanay': 'Defiant',
-    'Gumaan': 'Melancholy',
-    'Downers At Dusk': 'Chill',
-    'Pain Killers': 'Energizing',
-    'Kya Tumhe Pata Hai': 'Romantic',
-    'Aisay Kaisay': 'Chill',
-    'Woh': 'Melancholy',
-    'Mann': 'Peaceful',
-    'Sukoon': 'Peaceful',
-    'Sad Vibes': 'Sad',
-    'Romantic Urdu': 'Romantic',
-    'Hip-Hop Energy': 'Energizing',
-    'Chill Lofi': 'Chill',
-    'Party Mix': 'Fun',
-    'Oceans': 'Peaceful',
-    'Sunsets': 'Peaceful',
-    'Energy': 'Energizing',
-    'Iron': 'Energizing',
-    'Power': 'Energizing',
-    'Focus': 'Focused',
-    'Zen': 'Peaceful',
-    'Library': 'Chill',
-    'Party': 'Fun',
-    'Bass': 'Rowdy',
-    'Rain': 'Peaceful',
-    'Night': 'Chill',
-    'Soft': 'Peaceful',
-    'Roads': 'Uplifting',
-    'Summer': 'Happy',
-    'Journey': 'Uplifting',
-};
-
-const allSongs: Song[] = songsJson.songs.map((track: any) => ({
-    id: track.id,
-    title: track.name,
-    artist: track.artist,
-    album: track.album,
-    duration: track.duration,
-    url: track.url,
-    artwork: track.artwork,
-    genre: albumGenreMap[track.album] || 'Other',
-    mood: albumMoodMap[track.album] || 'Chill',
-    play_count: 0,
-    description: '',
-    release_date: '',
-    bpm: 0,
-    musical_key: '',
-}));
+/**
+ * Fallback songs — used when the JioSaavn API is unavailable.
+ * These are CC-licensed playable tracks from SoundHelix (no auth needed).
+ */
+const allSongs: Song[] = [
+    {
+        id: 'jam-fb-1', title: 'Electric Dreams', artist: 'Synthwave Collective',
+        album: 'Neon Nights', duration: '3:45', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+        artwork: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?q=80&w=300&auto=format&fit=crop',
+        genre: 'Electronic', mood: 'Energizing',
+    },
+    {
+        id: 'jam-fb-2', title: 'Midnight Pulse', artist: 'Bass Theory',
+        album: 'After Dark', duration: '4:12', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
+        artwork: 'https://images.unsplash.com/photo-1571330735066-03aaa9429d89?q=80&w=300&auto=format&fit=crop',
+        genre: 'Electronic', mood: 'Chill',
+    },
+    {
+        id: 'jam-fb-3', title: 'Ocean Breeze', artist: 'Chill Horizon',
+        album: 'Seaside Sessions', duration: '3:28', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
+        artwork: 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?q=80&w=300&auto=format&fit=crop',
+        genre: 'Lofi', mood: 'Peaceful',
+    },
+    {
+        id: 'jam-fb-4', title: 'Neon Skyline', artist: 'Retro Wave',
+        album: 'City Lights', duration: '4:05', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3',
+        artwork: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=300&auto=format&fit=crop',
+        genre: 'Pop', mood: 'Uplifting',
+    },
+    {
+        id: 'jam-fb-5', title: 'Velvet Shadows', artist: 'Luna Echo',
+        album: 'Dreamscape', duration: '3:52', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3',
+        artwork: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=300&auto=format&fit=crop',
+        genre: 'Ambient', mood: 'Chill',
+    },
+    {
+        id: 'jam-fb-6', title: 'Solar Flare', artist: 'Cosmic Dust',
+        album: 'Stellar', duration: '3:34', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3',
+        artwork: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=300&auto=format&fit=crop',
+        genre: 'Electronic', mood: 'Energizing',
+    },
+    {
+        id: 'jam-fb-7', title: 'Deep Currents', artist: 'Aqua Sound',
+        album: 'Underwater', duration: '4:22', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3',
+        artwork: 'https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?q=80&w=300&auto=format&fit=crop',
+        genre: 'Ambient', mood: 'Peaceful',
+    },
+    {
+        id: 'jam-fb-8', title: 'Golden Hour', artist: 'Sunset Vibes',
+        album: 'Twilight', duration: '3:18', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3',
+        artwork: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?q=80&w=300&auto=format&fit=crop',
+        genre: 'Pop', mood: 'Happy',
+    },
+    {
+        id: 'jam-fb-9', title: 'Pulse Drive', artist: 'Electro Bloom',
+        album: 'Voltage', duration: '3:41', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3',
+        artwork: 'https://images.unsplash.com/photo-1487180142328-054b783fc471?q=80&w=300&auto=format&fit=crop',
+        genre: 'Electronic', mood: 'Rowdy',
+    },
+    {
+        id: 'jam-fb-10', title: 'Crystal Waves', artist: 'Ambient Lake',
+        album: 'Serenity', duration: '4:55', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3',
+        artwork: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=300&auto=format&fit=crop',
+        genre: 'Classical', mood: 'Peaceful',
+    },
+    {
+        id: 'jam-fb-11', title: 'Thunder Road', artist: 'Storm Riders',
+        album: 'Rebel Heart', duration: '3:27', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-11.mp3',
+        artwork: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=300&auto=format&fit=crop',
+        genre: 'Hip-Hop', mood: 'Defiant',
+    },
+    {
+        id: 'jam-fb-12', title: 'Starlight Avenue', artist: 'Nova Beat',
+        album: 'Infinity', duration: '3:58', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-12.mp3',
+        artwork: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=300&auto=format&fit=crop',
+        genre: 'Pop', mood: 'Romantic',
+    },
+    {
+        id: 'jam-fb-13', title: 'Rhythm Garden', artist: 'Green Valley',
+        album: 'Nature Code', duration: '4:10', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-13.mp3',
+        artwork: 'https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?q=80&w=300&auto=format&fit=crop',
+        genre: 'Lofi', mood: 'Focused',
+    },
+    {
+        id: 'jam-fb-14', title: 'Phantom Groove', artist: 'Dark Matter',
+        album: 'Void', duration: '3:36', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-14.mp3',
+        artwork: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?q=80&w=300&auto=format&fit=crop',
+        genre: 'Electronic', mood: 'Rowdy',
+    },
+    {
+        id: 'jam-fb-15', title: 'Aurora Beat', artist: 'Northern Lights',
+        album: 'Arctic Sessions', duration: '4:02', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-15.mp3',
+        artwork: 'https://images.unsplash.com/photo-1516280440614-37939bbacd6a?q=80&w=300&auto=format&fit=crop',
+        genre: 'Lofi', mood: 'Chill',
+    },
+    {
+        id: 'jam-fb-16', title: 'Desert Wind', artist: 'Sand Storm',
+        album: 'Oasis', duration: '3:49', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-16.mp3',
+        artwork: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=300&auto=format&fit=crop',
+        genre: 'Electronic', mood: 'Energizing',
+    },
+    {
+        id: 'jam-fb-17', title: 'Urban Jungle', artist: 'Metro Pulse',
+        album: 'Street Beats', duration: '3:22', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-17.mp3',
+        artwork: 'https://images.unsplash.com/photo-1534258936925-c58bed479fcb?q=80&w=300&auto=format&fit=crop',
+        genre: 'Hip-Hop', mood: 'Energizing',
+    },
+    {
+        id: 'jam-fb-18', title: 'Silk Road', artist: 'Eastern Wind',
+        album: 'Journey East', duration: '4:30', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-18.mp3',
+        artwork: 'https://images.unsplash.com/photo-1484755560693-a4074577af3a?q=80&w=300&auto=format&fit=crop',
+        genre: 'Classical', mood: 'Peaceful',
+    },
+    {
+        id: 'jam-fb-19', title: 'Pixel Rain', artist: 'Digital Forest',
+        album: 'Cyberia', duration: '3:15', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-19.mp3',
+        artwork: 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?q=80&w=300&auto=format&fit=crop',
+        genre: 'Electronic', mood: 'Fun',
+    },
+    {
+        id: 'jam-fb-20', title: 'Gravity Well', artist: 'Orbit Sound',
+        album: 'Space Echo', duration: '4:18', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-20.mp3',
+        artwork: 'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?q=80&w=300&auto=format&fit=crop',
+        genre: 'Ambient', mood: 'Focused',
+    },
+    // Above: CC-licensed fallback songs (used when JioSaavn API is offline)
+];
 
 export const getAllSongs = (): Song[] => allSongs;
 
@@ -189,18 +241,17 @@ export const searchSongs = (query: string): Song[] => {
 export const getFeaturedPlaylists = () => {
     const artists = getUniqueArtists();
     const topArtists = artists.slice(0, 4);
+    const plColors = ['#FF6B6B', '#6C63FF', '#4ECDC4', '#FFA07A'];
+    const emojis = ['🎤', '🎵', '🌙', '🎶'];
 
     return topArtists.map((artist, index) => {
         const artistSongs = getSongsByArtist(artist.name);
-        const colors = ['#FF6B6B', '#6C63FF', '#4ECDC4', '#FFA07A'];
-        const emojis = ['🎤', '🎵', '🌙', '🎶'];
-
         return {
             id: `playlist-${index + 1}`,
             title: `${artist.name} Hits`,
             songs: `${artistSongs.length} songs`,
             artist: artist.name,
-            color: colors[index % colors.length],
+            color: plColors[index % plColors.length],
             subtitle: `Best of ${artist.name}`,
             emoji: emojis[index % emojis.length],
             trackList: artistSongs,

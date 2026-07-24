@@ -22,7 +22,6 @@ import {
     type Song,
     getAllSongs,
     getUniqueArtists,
-    getUniqueGenres,
     getUniqueMoods,
     getSongByName,
     getFeaturedPlaylists,
@@ -150,96 +149,7 @@ const FOCUS_IMAGES = [
     'https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?q=80&w=300&auto=format&fit=crop',
 ];
 
-const FALLBACK_SONGS: Song[] = [
-    {
-        id: '1',
-        title: 'Afsanay',
-        artist: 'Talha Anjum',
-        album: 'Afsanay',
-        duration: '3:45',
-        url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-        artwork: 'https://picsum.photos/seed/afsanay/300',
-        genre: 'Hip-Hop',
-        mood: 'Defiant',
-    },
-    {
-        id: '2',
-        title: 'Kya Tumhe Pata Hai',
-        artist: 'Hasan Raheem',
-        album: 'Kya Tumhe Pata Hai',
-        duration: '3:20',
-        url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3',
-        artwork: 'https://picsum.photos/seed/kya/300',
-        genre: 'Pop',
-        mood: 'Romantic',
-    },
-    {
-        id: '3',
-        title: 'Mann',
-        artist: 'Talwinder',
-        album: 'Mann',
-        duration: '3:50',
-        url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3',
-        artwork: 'https://picsum.photos/seed/mann/300',
-        genre: 'Pop',
-        mood: 'Peaceful',
-    },
-    {
-        id: '4',
-        title: 'Midnight Run',
-        artist: 'Outer Banks',
-        album: 'Night Vibes',
-        duration: '4:10',
-        url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
-        artwork: 'https://picsum.photos/seed/midnight/300',
-        genre: 'Electronic',
-        mood: 'Energizing',
-    },
-    {
-        id: '5',
-        title: 'Chill Waves',
-        artist: 'Lofi Collective',
-        album: 'Lofi Sessions',
-        duration: '3:30',
-        url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
-        artwork: 'https://picsum.photos/seed/chill/300',
-        genre: 'Lofi',
-        mood: 'Chill',
-    },
-    {
-        id: '6',
-        title: 'Deep Focus',
-        artist: 'Study Beats',
-        album: 'Concentration',
-        duration: '5:00',
-        url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3',
-        artwork: 'https://picsum.photos/seed/focus/300',
-        genre: 'Ambient',
-        mood: 'Focused',
-    },
-    {
-        id: '7',
-        title: 'Pump It Up',
-        artist: 'DJ Energy',
-        album: 'Workout Mix',
-        duration: '3:15',
-        url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3',
-        artwork: 'https://picsum.photos/seed/workout/300',
-        genre: 'Electronic',
-        mood: 'Energizing',
-    },
-    {
-        id: '8',
-        title: 'Sunset Drive',
-        artist: 'Retro Wave',
-        album: 'Neon Nights',
-        duration: '4:20',
-        url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3',
-        artwork: 'https://picsum.photos/seed/sunset/300',
-        genre: 'Pop',
-        mood: 'Peaceful',
-    },
-];
+
 
 const HomeScreen = ({ navigation }: any) => {
     const [userName, setUserName] = useState('Guest');
@@ -299,75 +209,24 @@ const HomeScreen = ({ navigation }: any) => {
     };
 
     const allSongs: Song[] = useMemo(() => {
-        try {
-            const songs = getAllSongs();
-            return (songs && songs.length > 0) ? songs : FALLBACK_SONGS;
-        } catch (error) {
-            return FALLBACK_SONGS;
-        }
+        return getAllSongs();
     }, []);
 
     const artists: Artist[] = useMemo(() => {
-        try {
-            const artistList = getUniqueArtists();
-            if (artistList && artistList.length > 0) return artistList;
-            const map = new Map<string, number>();
-            allSongs.forEach(song => map.set(song.artist, (map.get(song.artist) || 0) + 1));
-            return Array.from(map.entries()).map(([name, songCount]) => ({ name, songCount }));
-        } catch (error) {
-            const map = new Map<string, number>();
-            allSongs.forEach(song => map.set(song.artist, (map.get(song.artist) || 0) + 1));
-            return Array.from(map.entries()).map(([name, songCount]) => ({ name, songCount }));
-        }
+        return getUniqueArtists();
     }, [allSongs]);
 
     useEffect(() => {
-        const fetchArtistImages = async () => {
-            try {
-                const images: { [key: string]: string } = {};
-                const promises = artists.slice(0, 10).map(async (artist) => {
-                    try {
-                        const response = await fetch(
-                            `https://api.deezer.com/search?q=${encodeURIComponent(artist.name)}&limit=1`
-                        );
-                        const json = await response.json();
-                        if (json.data && json.data.length > 0) {
-                            images[artist.name] = json.data[0].artist.picture_medium;
-                        }
-                    } catch (err) {
-                        console.log(`Error fetching image for ${artist.name}:`, err);
-                    }
-                });
-                await Promise.all(promises);
-                setArtistImages(images);
-            } catch (error) {
-                console.log('Error fetching artist images:', error);
-            }
-        };
-        fetchArtistImages();
-    }, [artists]);
+        const images: { [key: string]: string } = {};
+        artists.forEach(artist => {
+            const song = allSongs.find(s => s.artist === artist.name && s.artwork);
+            if (song) images[artist.name] = song.artwork!;
+        });
+        setArtistImages(images);
+    }, [artists, allSongs]);
 
     const moods = useMemo((): Mood[] => {
-        try {
-            const moodList = getUniqueMoods();
-            if (moodList && moodList.length > 0) {
-                return moodList;
-            }
-            const map = new Map<string, number>();
-            allSongs.forEach(song => {
-                const m = song.mood || 'Chill';
-                map.set(m, (map.get(m) || 0) + 1);
-            });
-            return Array.from(map.entries()).map(([name, songCount]) => ({ name, songCount }));
-        } catch (error) {
-            console.log('Error loading moods:', error);
-            const map = new Map<string, number>();
-            allSongs.forEach(song => {
-                const m = song.mood || 'Chill';
-                map.set(m, (map.get(m) || 0) + 1);
-            });
-            return Array.from(map.entries()).map(([name, songCount]) => ({ name, songCount }));
-        }
+        return getUniqueMoods();
     }, [allSongs]);
 
     const recentPlayed: RecentItem[] = useMemo(() => {
@@ -508,8 +367,8 @@ const HomeScreen = ({ navigation }: any) => {
                         </View>
                     )}
                 </View>
-                <Text style={styles.artistName} numberOfLines={1}>{item.name}</Text>
-                <Text style={styles.artistLabel}>{item.songCount || 0} songs</Text>
+                <Text style={styles.artistName} numberOfLines={2}>{item.name}</Text>
+                {/* <Text style={styles.artistLabel}>{item.songCount} songs</Text> */}
             </TouchableOpacity>
         );
     };
@@ -909,7 +768,7 @@ const HomeScreen = ({ navigation }: any) => {
                 <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>Top Workout Tracks</Text>
                 </View>
-                {workoutSongs.map((song, index) => renderSongItem(song, index, '#FF6B6B'))}
+                {workoutSongs.map((song, index) => renderSongItem(song, index, '#1DB954'))}
             </View>
 
             <View style={styles.section}>
@@ -937,8 +796,8 @@ const HomeScreen = ({ navigation }: any) => {
                 <ImageBackground source={{ uri: FOCUS_IMAGES[0] }} style={{ width: '100%', height: '100%' }}>
                     <View style={styles.heroOverlay}>
                         <View style={styles.heroBadge}>
-                            <Icon name="leaf" size={12} color="#4ECDC4" style={{ marginRight: 4 }} />
-                            <Text style={[styles.heroBadgeText, { color: '#4ECDC4' }]}>ZEN MODE</Text>
+                            <Icon name="leaf" size={12} color="#1DB954" style={{ marginRight: 4 }} />
+                            <Text style={[styles.heroBadgeText, { color: '#1DB954' }]}>ZEN MODE</Text>
                         </View>
                         <Text style={styles.heroTitle}>Deep Focus</Text>
                         <Text style={styles.heroSubtitle}>Ambient and lofi sounds to help you concentrate and find your flow.</Text>
@@ -971,7 +830,7 @@ const HomeScreen = ({ navigation }: any) => {
                 <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>Focus Tracks</Text>
                 </View>
-                {focusSongs.map((song, index) => renderSongItem(song, index, '#4ECDC4'))}
+                {focusSongs.map((song, index) => renderSongItem(song, index, '#1DB954'))}
             </View>
 
             <View style={styles.section}>
@@ -1210,7 +1069,6 @@ const styles = StyleSheet.create({
     playlistTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
     playlistSongs: { color: '#B3B3B3', fontSize: 12, marginTop: 2 },
 
-    // Mood Cards
     moodCardWrapper: {
         width: 140,
         marginRight: 12,
@@ -1280,7 +1138,6 @@ const styles = StyleSheet.create({
     radioName: { color: '#FFFFFF', fontSize: 12, fontWeight: '600', marginTop: 8, textAlign: 'center' },
     radioTag: { color: '#1DB954', fontSize: 9, fontWeight: '600', marginTop: 2, textAlign: 'center' },
 
-    // Top Artists Cards
     artistCard: {
         width: 100,
         marginRight: 16,
@@ -1312,7 +1169,6 @@ const styles = StyleSheet.create({
     artistName: { color: '#FFFFFF', fontSize: 14, fontWeight: '600', textAlign: 'center' },
     artistLabel: { color: '#888888', fontSize: 12, marginTop: 2 },
 
-    // Song Row
     songRow: {
         flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 8,
     },
@@ -1326,7 +1182,6 @@ const styles = StyleSheet.create({
         width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center',
     },
 
-    // Podcast styles
     podcastCard: {
         width: 200, marginRight: 14, backgroundColor: '#151515', borderRadius: 12, overflow: 'hidden',
         borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)',
@@ -1356,7 +1211,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center', alignItems: 'center',
     },
 
-    // Radio hero
     radioHeroContainer: {
         marginHorizontal: 20, marginTop: 8, marginBottom: 12,
         backgroundColor: '#151515', borderRadius: 16, padding: 24,
@@ -1371,14 +1225,12 @@ const styles = StyleSheet.create({
     },
     radioGenreText: { fontSize: 13, fontWeight: '700' },
 
-    // Workout styles
     workoutHero: { height: 190, marginHorizontal: 20, borderRadius: 16, overflow: 'hidden', marginTop: 8, marginBottom: 12 },
     workoutCard: { width: 140, marginRight: 14 },
     workoutImage: { width: 140, height: 100, borderRadius: 12, marginBottom: 6 },
     workoutCardTitle: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
     workoutCardSub: { color: '#888', fontSize: 10, marginTop: 2 },
 
-    // Focus styles
     focusHero: { height: 190, marginHorizontal: 20, borderRadius: 16, overflow: 'hidden', marginTop: 8, marginBottom: 12 },
     focusCard: { width: 140, marginRight: 14 },
     focusImage: { width: 140, height: 100, borderRadius: 12, marginBottom: 6 },
@@ -1394,7 +1246,7 @@ const styles = StyleSheet.create({
         flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: '#1A1A2E',
         alignItems: 'center', borderWidth: 1, borderColor: 'rgba(78,205,196,0.2)',
     },
-    timerChipText: { color: '#4ECDC4', fontSize: 13, fontWeight: '700' },
+    timerChipText: { color: colors.green, fontSize: 13, fontWeight: '700' },
     timerChipLabel: { color: '#666', fontSize: 10, marginTop: 2 },
 });
 
