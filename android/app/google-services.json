@@ -20,7 +20,14 @@
             "package_name": "com.musicapp",
             "certificate_hash": "89b1d1f04cdf4d5e65d1cccc03c33f7989c17281"
           }
-
+        },
+        {
+          "client_id": "384995844524-ng2sj5gppsnion3uu3j8leqobv0896g6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.musicapp",
+            "certificate_hash": "9d5630ad5a0d7a8cd439cddf8551fbc7a9bc3506"
+          }
         },
         {
           "client_id": "384995844524-o1g198gl9l0q1sqj1jf4n6fi3esqn6c5.apps.googleusercontent.com",
@@ -46,5 +53,3 @@
   ],
   "configuration_version": "1"
 }
-
-

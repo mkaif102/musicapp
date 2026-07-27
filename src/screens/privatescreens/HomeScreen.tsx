@@ -388,51 +388,6 @@ const HomeScreen = ({ navigation }: any) => {
 
     const renderMusicCategory = () => (
         <>
-            <View style={styles.quickGridContainer}>
-                <View style={styles.gridRow}>
-                    <TouchableOpacity style={styles.gridItem} onPress={() => handleQuickAction('Liked Songs')} activeOpacity={0.8}>
-                        <View style={[styles.gridGradientBox, { backgroundColor: '#3A1C71' }]}>
-                            <Icon name="heart" size={20} color="#FFFFFF" />
-                        </View>
-                        <Text style={styles.gridItemText} numberOfLines={1}>Liked Songs</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.gridItem} onPress={() => handleQuickAction('Heavy Rotation')} activeOpacity={0.8}>
-                        <View style={[styles.gridGradientBox, { backgroundColor: '#11998e' }]}>
-                            <Icon name="repeat" size={20} color="#FFFFFF" />
-                        </View>
-                        <Text style={styles.gridItemText} numberOfLines={1}>Heavy Rotation</Text>
-                    </TouchableOpacity>
-                </View>
-                <View style={styles.gridRow}>
-                    <TouchableOpacity style={styles.gridItem} onPress={() => handleQuickAction('Your Podcasts')} activeOpacity={0.8}>
-                        <View style={[styles.gridGradientBox, { backgroundColor: '#fc4a1a' }]}>
-                            <Icon name="mic" size={20} color="#FFFFFF" />
-                        </View>
-                        <Text style={styles.gridItemText} numberOfLines={1}>Podcasts</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.gridItem} onPress={() => handleQuickAction('Local Files')} activeOpacity={0.8}>
-                        <View style={[styles.gridGradientBox, { backgroundColor: '#ff007f' }]}>
-                            <Icon name="folder-open" size={20} color="#FFFFFF" />
-                        </View>
-                        <Text style={styles.gridItemText} numberOfLines={1}>On Device</Text>
-                    </TouchableOpacity>
-                </View>
-                <View style={styles.gridRow}>
-                    <TouchableOpacity style={styles.gridItem} onPress={() => handleQuickAction('Devotional Mix')} activeOpacity={0.8}>
-                        <View style={[styles.gridGradientBox, { backgroundColor: '#F2C94C' }]}>
-                            <Icon name="sunny" size={20} color="#000000" />
-                        </View>
-                        <Text style={styles.gridItemText} numberOfLines={1}>Devotional</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.gridItem} onPress={() => handleQuickAction('Premium Releases')} activeOpacity={0.8}>
-                        <View style={[styles.gridGradientBox, { backgroundColor: '#100C18' }]}>
-                            <Icon name="trophy" size={18} color="#FFD700" />
-                        </View>
-                        <Text style={styles.gridItemText} numberOfLines={1}>Top Releases</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
-
             <TouchableOpacity
                 style={styles.heroBanner}
                 activeOpacity={0.9}
@@ -948,41 +903,6 @@ const styles = StyleSheet.create({
     categoryPillActive: { backgroundColor: '#1DB954', borderColor: '#1DB954' },
     categoryText: { color: '#A7A7A7', fontSize: 13, fontWeight: '600' },
     categoryTextActive: { color: '#000000', fontWeight: '700' },
-
-    quickGridContainer: {
-        paddingHorizontal: 20,
-        marginBottom: 16,
-        gap: 10,
-    },
-    gridRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        gap: 10,
-    },
-    gridItem: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#151515',
-        height: 56,
-        borderRadius: 8,
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.04)',
-    },
-    gridGradientBox: {
-        width: 56,
-        height: 56,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    gridItemText: {
-        color: '#FFFFFF',
-        fontSize: 13,
-        fontWeight: '700',
-        paddingHorizontal: 12,
-        flex: 1,
-    },
 
     heroBanner: {
         height: 190,

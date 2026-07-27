@@ -255,9 +255,9 @@ const ProfileScreen = ({ navigation }: any) => {
     const menuItems = [
         { id: '1', icon: 'person-outline', label: 'Edit Profile', screen: 'EditProfile' },
         { id: '2', icon: 'list-outline', label: 'My Playlists', screen: 'MyPlaylists' },
-        { id: '3', icon: 'time-outline', label: 'Listening History', screen: 'RecentlyPlayed' },
-        { id: '4', icon: 'settings-outline', label: 'Settings', screen: 'Settings' },
-        // { id: '5', icon: 'help-circle-outline', label: 'Help & Support', screen: 'HelpCenter' },
+        { id: '3', icon: 'heart-outline', label: 'Likes', screen: 'LikedSongs' },
+        { id: '4', icon: 'time-outline', label: 'Listening History', screen: 'RecentlyPlayed' },
+        { id: '5', icon: 'settings-outline', label: 'Settings', screen: 'Settings' },
     ];
 
     return (

@@ -332,7 +332,7 @@ const LoginScreen = ({ navigation }: { navigation: any }) => {
 
                             <View style={styles.dividerContainer}>
                                 <View style={styles.divider} />
-                                <Text style={styles.dividerText}>or continue with</Text>
+                                <Text style={styles.dividerText}>& continue with</Text>
                                 <View style={styles.divider} />
                             </View>
 

@@ -13,9 +13,12 @@ import {
     ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
+    PermissionsAndroid,
+    Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { NativeModules } from 'react-native';
 import TrackPlayer from 'react-native-track-player';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -50,7 +53,9 @@ const SearchScreen = ({ navigation }: any) => {
     const [apiLoading, setApiLoading] = useState(false);
     const [currentPlayingId, setCurrentPlayingId] = useState<string | number | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
+    const [isListening, setIsListening] = useState(false);
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const performSearchRef = useRef<(q: string) => void>(() => {});
 
     const allSongs = useMemo(() => {
         try { return getAllSongs() || []; } catch { return []; }
@@ -140,10 +145,58 @@ const SearchScreen = ({ navigation }: any) => {
         }, 500);
     }, [allSongs, artists, genres, activeTab]);
 
+    useEffect(() => {
+        performSearchRef.current = performSearch;
+    }, [performSearch]);
+
     const clearSearch = () => {
         setSearchQuery('');
         setSearchResults([]);
         setApiSearchResults([]);
+    };
+
+    const startListening = async () => {
+        try {
+            if (isListening) return;
+            if (Platform.OS === 'android') {
+                const granted = await PermissionsAndroid.request(
+                    PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+                    {
+                        title: 'Microphone Permission',
+                        message: 'App needs microphone access for voice search',
+                        buttonPositive: 'Allow',
+                        buttonNegative: 'Deny',
+                    },
+                );
+                if (granted === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+                    Alert.alert(
+                        'Permission Required',
+                        'Microphone permission was permanently denied. Please enable it from app settings.',
+                        [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+                        ],
+                    );
+                    return;
+                }
+                if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+                    return;
+                }
+            }
+            setIsListening(true);
+            const { VoiceSearch } = NativeModules;
+            const text = await VoiceSearch.startListening();
+            if (text) {
+                performSearchRef.current(text);
+                saveToHistory(text);
+            }
+        } catch (error: any) {
+            if (error?.code !== 'CANCELLED') {
+                console.log('Voice search error:', error);
+            }
+        } finally {
+            setIsListening(false);
+        }
     };
 
     const saveToHistory = (query: string) => {
@@ -503,27 +556,22 @@ const SearchScreen = ({ navigation }: any) => {
                         autoFocus
                         returnKeyType="search"
                     />
+                    <TouchableOpacity
+                        onPress={startListening}
+                        style={styles.voiceButton}
+                    >
+                        <Icon
+                            name={isListening ? 'mic' : 'mic-outline'}
+                            size={26}
+                            color={isListening ? '#1DB954' : '#666'}
+                        />
+                    </TouchableOpacity>
                     {searchQuery.length > 0 && (
                         <TouchableOpacity onPress={clearSearch} style={styles.clearButton}>
-                            <Icon name="close-circle" size={22} color="#666" />
+                            <Icon name="close-circle" size={26} color="#666" />
                         </TouchableOpacity>
                     )}
                 </View>
-
-                {/* <View style={styles.tabsContainer}>
-                    {tabs.map((tab) => (
-                        <TouchableOpacity
-                            key={tab}
-                            style={[styles.tab, activeTab === tab && styles.activeTab]}
-                            onPress={() => {
-                                setActiveTab(tab);
-                                if (searchQuery) performSearch(searchQuery);
-                            }}
-                        >
-                            <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </View> */}
 
                 {searchQuery.length > 0 ? (
                     <FlatList
@@ -563,41 +611,6 @@ const SearchScreen = ({ navigation }: any) => {
                             </View>
                         )}
 
-                        {/* <View style={styles.section}>
-                            <Text style={styles.sectionTitle}>Browse by Genre</Text>
-                            <FlatList
-                                data={genres}
-                                renderItem={renderCategoryCard}
-                                keyExtractor={(item) => item.name}
-                                numColumns={2}
-                                scrollEnabled={false}
-                                contentContainerStyle={styles.categoryGrid}
-                            />
-                        </View>
-
-                        <View style={styles.section}>
-                            <View style={styles.sectionHeader}>
-                                <Text style={styles.sectionTitle}>Trending Songs</Text>
-                            </View>
-                            {allSongs.slice(0, 4).map((song, index) => (
-                                <TouchableOpacity
-                                    key={song.id}
-                                    style={styles.trendingItem}
-                                    onPress={() => playSong(song)}
-                                >
-                                    <Text style={styles.trendingIndex}>{index + 1}</Text>
-                                    <View style={styles.trendingIcon}>
-                                        <Text style={styles.trendingEmoji}>🎵</Text>
-                                    </View>
-                                    <View style={styles.trendingInfo}>
-                                        <Text style={styles.trendingTitle}>{song.title}</Text>
-                                        <Text style={styles.trendingArtist}>{song.artist}</Text>
-                                    </View>
-                                    <Text style={styles.trendingDuration}>{song.duration}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View> */}
-
                         <View style={{ height: 40 }} />
                     </ScrollView>
                 )}
@@ -624,6 +637,7 @@ const styles = StyleSheet.create({
     searchIcon: { marginRight: 12 },
     searchInput: { flex: 1, color: '#FFFFFF', fontSize: 16, padding: 0 },
     clearButton: { padding: 4 },
+    voiceButton: { padding: 4, marginLeft: 4 },
     tabsContainer: { flexDirection: 'row', paddingHorizontal: 16, marginBottom: 16, gap: 8 },
     tab: {
         paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20,
