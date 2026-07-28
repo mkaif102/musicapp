@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     View,
     Text,
@@ -19,7 +19,7 @@ import TrackPlayer, {
     useProgress,
     useActiveTrack,
 } from 'react-native-track-player';
-import { isSongLiked, toggleLikeSong, type LikedSong } from '../../utils/likedSongs';
+import { isSongLiked, toggleLikeSong, getLikedSongs, type LikedSong } from '../../utils/likedSongs';
 import { saveToRecentlyPlayed } from '../../utils/recentlyPlayed';
 
 const { width } = Dimensions.get('window');
@@ -33,6 +33,16 @@ const parseDuration = (d: string): number => {
 
 const formatDur = (d?: number) =>
     d ? `${Math.floor(d / 60)}:${String(Math.floor(d % 60)).padStart(2, '0')}` : '0:00';
+
+const resolveCachedUrl = async (url: string): Promise<string> => {
+    try {
+        const liked = await getLikedSongs();
+        const match = liked.find((s) => s.url === url && s.cachedPath);
+        return match?.cachedPath || url;
+    } catch {
+        return url;
+    }
+};
 
 const SongDetailScreen = ({ navigation, route }: any) => {
     const { song, playlist: initialPlaylist = [], currentIndex: initialIndex = 0 } = route?.params || {};
@@ -52,6 +62,9 @@ const SongDetailScreen = ({ navigation, route }: any) => {
     const [currentPlaylist, setCurrentPlaylist] = useState(initialPlaylist);
     const [currentIdx, setCurrentIdx] = useState(initialIndex);
     const isMountedRef = useRef(false);
+    const songRef = useRef(song);
+    const playlistRef = useRef(initialPlaylist);
+    const idxRef = useRef(initialIndex);
 
     const songData = activeTrack
         ? {
@@ -60,9 +73,9 @@ const SongDetailScreen = ({ navigation, route }: any) => {
             artwork: activeTrack.artwork || 'https://picsum.photos/seed/song/400',
             duration: activeTrack.duration ? formatDur(activeTrack.duration) : '0:00',
             url: activeTrack.url,
-            likes: song?.likes || 0,
+            likes: songRef.current?.likes || 0,
         }
-        : song || {
+        : songRef.current || {
             title: 'Song Title',
             artist: 'Singer Name',
             artwork: 'https://picsum.photos/seed/song/400',
@@ -85,7 +98,7 @@ const SongDetailScreen = ({ navigation, route }: any) => {
             if (songData.title) {
                 const liked = await isSongLiked(songData.title);
                 setIsLiked(liked);
-                setLikeCount(liked ? (song?.likes || 0) + 1 : (song?.likes || 0));
+                setLikeCount(liked ? (songRef.current?.likes || 0) + 1 : (songRef.current?.likes || 0));
             }
         };
         checkLiked();
@@ -96,51 +109,57 @@ const SongDetailScreen = ({ navigation, route }: any) => {
         isMountedRef.current = true;
 
         const loadSong = async () => {
-            if (!songData.url) return;
+            const currentSong = songRef.current;
+            if (!currentSong?.url) return;
+
+            const resolvedUrl = await resolveCachedUrl(currentSong.url);
 
             await saveToRecentlyPlayed({
-                id: songData.title || 'unknown',
-                title: songData.title,
-                artist: songData.artist,
+                id: currentSong.title || 'unknown',
+                title: currentSong.title,
+                artist: currentSong.artist,
                 album: '',
-                duration: songData.duration || '0:00',
-                url: songData.url || '',
-                artwork: songData.artwork || 'https://picsum.photos/seed/song/400',
+                duration: currentSong.duration || '0:00',
+                url: currentSong.url || '',
+                artwork: currentSong.artwork || 'https://picsum.photos/seed/song/400',
             });
 
             try {
                 const existingTrack = await TrackPlayer.getActiveTrack();
-                if (existingTrack && existingTrack.url === songData.url) {
+                if (existingTrack && existingTrack.url === resolvedUrl) {
                     return;
                 }
                 const queue = await TrackPlayer.getQueue();
-                const existingIndex = queue.findIndex((t) => t.url === songData.url);
+                const existingIndex = queue.findIndex((t) => t.url === resolvedUrl);
                 if (existingIndex >= 0) {
                     await TrackPlayer.skip(existingIndex);
                     await TrackPlayer.play();
                     return;
                 }
 
-                const buildTrack = (s: any, idx: number) => ({
+                const buildTrack = async (s: any, idx: number) => ({
                     id: s.url || `track-${idx}`,
-                    url: s.url || '',
+                    url: await resolveCachedUrl(s.url),
                     title: s.title || 'Unknown',
                     artist: s.artist || 'Unknown Artist',
                     artwork: s.artwork || 'https://picsum.photos/seed/song/400',
                     duration: parseDuration(s.duration || '0:00'),
                 });
 
-                if (currentPlaylist.length > 0) {
-                    const tracks = currentPlaylist.map((s: any, idx: number) => buildTrack(s, idx));
+                const pl = playlistRef.current;
+                const idx = idxRef.current;
+
+                if (pl.length > 0) {
+                    const tracks = await Promise.all(pl.map((s: any, i: number) => buildTrack(s, i)));
                     await TrackPlayer.reset();
                     await TrackPlayer.add(tracks);
-                    const targetIndex = currentPlaylist.findIndex((s: any) => s.url === songData.url);
-                    const skipTo = targetIndex >= 0 ? targetIndex : currentIdx;
+                    const targetIndex = pl.findIndex((s: any) => s.url === currentSong.url);
+                    const skipTo = targetIndex >= 0 ? targetIndex : idx;
                     await TrackPlayer.skip(skipTo);
                     await TrackPlayer.play();
-                    if (skipTo !== currentIdx) setCurrentIdx(skipTo);
+                    if (skipTo !== idx) setCurrentIdx(skipTo);
                 } else {
-                    const track = buildTrack(songData, 0);
+                    const track = await buildTrack(currentSong, 0);
                     await TrackPlayer.reset();
                     await TrackPlayer.add(track);
                     await TrackPlayer.play();
@@ -148,29 +167,32 @@ const SongDetailScreen = ({ navigation, route }: any) => {
             } catch (error: any) {
                 if (error?.code === 'player_already_initialized' || error?.message?.includes('already')) {
                     try {
+                        const currentSong2 = songRef.current;
+                        const pl2 = playlistRef.current;
+                        const idx2 = idxRef.current;
                         await TrackPlayer.reset();
-                        if (currentPlaylist.length > 0) {
-                            const tracks = currentPlaylist.map((s: any, idx: number) => ({
-                                id: s.url || `track-${idx}`,
-                                url: s.url || '',
+                        if (pl2.length > 0) {
+                            const tracks = await Promise.all(pl2.map(async (s: any, i: number) => ({
+                                id: s.url || `track-${i}`,
+                                url: await resolveCachedUrl(s.url),
                                 title: s.title || 'Unknown',
                                 artist: s.artist || 'Unknown Artist',
                                 artwork: s.artwork || 'https://picsum.photos/seed/song/400',
                                 duration: parseDuration(s.duration || '0:00'),
-                            }));
+                            })));
                             await TrackPlayer.add(tracks);
-                            const targetIndex = currentPlaylist.findIndex((s: any) => s.url === songData.url);
-                            const skipTo = targetIndex >= 0 ? targetIndex : currentIdx;
+                            const targetIndex = pl2.findIndex((s: any) => s.url === currentSong2?.url);
+                            const skipTo = targetIndex >= 0 ? targetIndex : idx2;
                             await TrackPlayer.skip(skipTo);
                             await TrackPlayer.play();
                         } else {
                             await TrackPlayer.add({
-                                id: songData.title || 'unknown',
-                                url: songData.url || '',
-                                title: songData.title,
-                                artist: songData.artist,
-                                artwork: songData.artwork,
-                                duration: parseDuration(songData.duration || '0:00'),
+                                id: currentSong2?.title || 'unknown',
+                                url: await resolveCachedUrl(currentSong2?.url || ''),
+                                title: currentSong2?.title || 'Unknown',
+                                artist: currentSong2?.artist || 'Unknown Artist',
+                                artwork: currentSong2?.artwork || 'https://picsum.photos/seed/song/400',
+                                duration: parseDuration(currentSong2?.duration || '0:00'),
                             });
                             await TrackPlayer.play();
                         }
@@ -192,7 +214,7 @@ const SongDetailScreen = ({ navigation, route }: any) => {
                 setCurrentIdx((prev: number) => (prev !== foundIndex ? foundIndex : prev));
             }
         }
-    }, [activeTrack?.url]);
+    }, [activeTrack?.url, currentPlaylist]);
 
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
@@ -210,42 +232,46 @@ const SongDetailScreen = ({ navigation, route }: any) => {
                     await TrackPlayer.play();
                 }
             } else {
-                const buildTrack = (s: any, idx: number) => ({
-                    id: s.url || `track-${idx}`,
-                    url: s.url || '',
+                const currentSong = songRef.current;
+                const pl = playlistRef.current;
+                const idx = playlistRef.current.length > 0 ? currentIdx : 0;
+
+                const buildTrack = async (s: any, i: number) => ({
+                    id: s.url || `track-${i}`,
+                    url: await resolveCachedUrl(s.url),
                     title: s.title || 'Unknown',
                     artist: s.artist || 'Unknown Artist',
                     artwork: s.artwork || 'https://picsum.photos/seed/song/400',
                     duration: parseDuration(s.duration || '0:00'),
                 });
 
-                if (currentPlaylist.length > 0) {
-                    const tracks = currentPlaylist.map((s: any, idx: number) => buildTrack(s, idx));
+                if (pl.length > 0) {
+                    const tracks = await Promise.all(pl.map((s: any, i: number) => buildTrack(s, i)));
                     await TrackPlayer.reset();
                     await TrackPlayer.add(tracks);
-                    const targetIndex = currentPlaylist.findIndex((s: any) => s.url === songData.url);
-                    const skipTo = targetIndex >= 0 ? targetIndex : currentIdx;
+                    const targetIndex = pl.findIndex((s: any) => s.url === currentSong?.url);
+                    const skipTo = targetIndex >= 0 ? targetIndex : idx;
                     await TrackPlayer.skip(skipTo);
                     await TrackPlayer.play();
                 } else {
                     await TrackPlayer.reset();
-                    await TrackPlayer.add(buildTrack(songData, 0));
+                    await TrackPlayer.add(await buildTrack(currentSong, 0));
                     await TrackPlayer.play();
                 }
             }
         } catch (error: any) {
             if (error?.code === 'player_already_initialized' || error?.message?.includes('already')) {
                 try {
+                    const currentSong = songRef.current;
                     await TrackPlayer.reset();
-                    const track = {
-                        id: songData.url || 'unknown',
-                        url: songData.url || '',
-                        title: songData.title,
-                        artist: songData.artist,
-                        artwork: songData.artwork,
-                        duration: parseDuration(songData.duration || '0:00'),
-                    };
-                    await TrackPlayer.add(track);
+                    await TrackPlayer.add({
+                        id: currentSong?.url || 'unknown',
+                        url: await resolveCachedUrl(currentSong?.url || ''),
+                        title: currentSong?.title || 'Unknown',
+                        artist: currentSong?.artist || 'Unknown Artist',
+                        artwork: currentSong?.artwork || 'https://picsum.photos/seed/song/400',
+                        duration: parseDuration(currentSong?.duration || '0:00'),
+                    });
                     await TrackPlayer.play();
                 } catch (innerError) {
                     console.log('Playback retry error:', innerError);
@@ -264,6 +290,20 @@ const SongDetailScreen = ({ navigation, route }: any) => {
         }
     };
 
+    // 10 seconds forward function
+    const handleSeekForward = async () => {
+        const currentPosition = position;
+        const newPosition = Math.min(currentPosition + 10, totalDuration);
+        await handleSeek(newPosition);
+    };
+
+    // 10 seconds backward function
+    const handleSeekBackward = async () => {
+        const currentPosition = position;
+        const newPosition = Math.max(currentPosition - 10, 0);
+        await handleSeek(newPosition);
+    };
+
     const handleLike = async () => {
         const likedSong: LikedSong = {
             id: songData.title || 'unknown',
@@ -271,7 +311,7 @@ const SongDetailScreen = ({ navigation, route }: any) => {
             artist: songData.artist || 'Unknown Artist',
             artwork: songData.artwork || 'https://picsum.photos/seed/song/400',
             duration: songData.duration || '0:00',
-            url: songData.url || '',
+            url: songRef.current?.url || '',
             likes: songData.likes || 0,
         };
         const nowLiked = await toggleLikeSong(likedSong);
@@ -356,7 +396,7 @@ const SongDetailScreen = ({ navigation, route }: any) => {
     const panResponder = PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: () => {},
+        onPanResponderGrant: () => { },
         onPanResponderMove: (evt) => {
             if (sliderWidth > 0) {
                 const touchX = evt.nativeEvent.locationX;
@@ -365,7 +405,7 @@ const SongDetailScreen = ({ navigation, route }: any) => {
                 handleSeek(seekTime);
             }
         },
-        onPanResponderRelease: () => {},
+        onPanResponderRelease: () => { },
     });
 
     const handleProgressPress = (event: any) => {
@@ -463,15 +503,20 @@ const SongDetailScreen = ({ navigation, route }: any) => {
                             style={styles.controlButton}
                             onPress={handleShuffle}
                         >
-                            <Icon
+                            {/* <Icon
                                 name="shuffle"
                                 size={24}
                                 color={isShuffled ? "#1DB954" : "#FFFFFF"}
-                            />
+                            /> */}
                         </TouchableOpacity>
 
                         <TouchableOpacity style={styles.controlButton} onPress={handleSkipBack}>
                             <Icon name="play-skip-back" size={28} color="#FFFFFF" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.controlButton} onPress={handleSeekBackward}>
+                            <Icon name="play-back" size={24} color="#FFFFFF" />
+                            <Text style={styles.seekLabel}>10</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -485,6 +530,12 @@ const SongDetailScreen = ({ navigation, route }: any) => {
                             />
                         </TouchableOpacity>
 
+                        {/* 10 Sec Forward Button */}
+                        <TouchableOpacity style={styles.controlButton} onPress={handleSeekForward}>
+                            <Icon name="play-forward" size={24} color="#FFFFFF" />
+                            <Text style={styles.seekLabel}>10</Text>
+                        </TouchableOpacity>
+
                         <TouchableOpacity style={styles.controlButton} onPress={handleSkipForward}>
                             <Icon name="play-skip-forward" size={28} color="#FFFFFF" />
                         </TouchableOpacity>
@@ -493,26 +544,11 @@ const SongDetailScreen = ({ navigation, route }: any) => {
                             style={styles.controlButton}
                             onPress={handleRepeat}
                         >
-                            <Icon
+                            {/* <Icon
                                 name="repeat"
                                 size={24}
                                 color={isRepeated ? "#1DB954" : "#FFFFFF"}
-                            />
-                        </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.additionalControls}>
-                        <TouchableOpacity style={styles.additionalButton}>
-                            <Icon name="mic-outline" size={20} color="#B3B3B3" />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.additionalButton}>
-                            <Icon name="list-outline" size={20} color="#B3B3B3" />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.additionalButton}>
-                            <Icon name="phone-portrait-outline" size={20} color="#B3B3B3" />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.additionalButton}>
-                            <Icon name="volume-medium-outline" size={20} color="#B3B3B3" />
+                            /> */}
                         </TouchableOpacity>
                     </View>
 
@@ -646,11 +682,20 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 20,
         marginBottom: 16,
-        gap: 8,
+        gap: 4,
     },
     controlButton: {
         padding: 12,
         borderRadius: 30,
+        alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: 44,
+    },
+    seekLabel: {
+        color: '#FFFFFF',
+        fontSize: 14,
+        fontWeight: '600',
+        marginTop: -2,
     },
     playButton: {
         width: 68,
@@ -665,15 +710,6 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 12,
         elevation: 8,
-    },
-    additionalControls: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        paddingHorizontal: 40,
-        marginTop: 8,
-    },
-    additionalButton: {
-        padding: 8,
     },
 });
 

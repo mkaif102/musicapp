@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
     View,
     Text,
@@ -13,16 +13,27 @@ import {
     ActivityIndicator,
     Image,
     Dimensions,
+    KeyboardAvoidingView,
+    Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import TrackPlayer, { State, usePlaybackState, useActiveTrack } from 'react-native-track-player';
 import { colors } from '../../theme/Colors';
-import { useFocusEffect } from '@react-navigation/native';
 import { saveToRecentlyPlayed } from '../../utils/recentlyPlayed';
 import { searchSongsByName } from '../../services/jiosaavn';
 import { parseDuration, getAllSongs, getSongsByGenre, getSongsByMood } from '../../data/songs';
 import type { Song } from '../../data/songs';
+import { useMiniPlayerHeight } from '../../hooks/useMiniPlayerHeight';
+import {
+    getCustomPlaylists,
+    createCustomPlaylist,
+    addSongsToPlaylist,
+    deleteCustomPlaylist,
+    type CustomPlaylist,
+    type CustomPlaylistSong,
+} from '../../utils/customPlaylists';
+import { getOfflineUrl, downloadSong } from '../../utils/offlineCache';
 
 const { width } = Dimensions.get('window');
 
@@ -35,6 +46,24 @@ const MyPlaylistsScreen = ({ navigation }: any) => {
     const playbackState = usePlaybackState();
     const activeTrack = useActiveTrack();
     const isPlaying = playbackState?.state === State.Playing;
+    const miniPlayerHeight = useMiniPlayerHeight();
+
+    const [customPlaylists, setCustomPlaylists] = useState<CustomPlaylist[]>([]);
+    const [createModalVisible, setCreateModalVisible] = useState(false);
+    const [newPlaylistName, setNewPlaylistName] = useState('');
+    const [addSongsModalVisible, setAddSongsModalVisible] = useState(false);
+    const [newlyCreatedPlaylist, setNewlyCreatedPlaylist] = useState<CustomPlaylist | null>(null);
+    const [selectedSongIds, setSelectedSongIds] = useState<Set<string>>(new Set());
+    const [addSongSearchQuery, setAddSongSearchQuery] = useState('');
+    const [allAvailableSongs, setAllAvailableSongs] = useState<Song[]>([]);
+    const [isSaving, setIsSaving] = useState(false);
+    const [addSongApiResults, setAddSongApiResults] = useState<Song[]>([]);
+    const [addSongApiLoading, setAddSongApiLoading] = useState(false);
+    const addSongDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // NEW: State for folder detail view
+    const [folderDetailVisible, setFolderDetailVisible] = useState(false);
+    const [selectedFolder, setSelectedFolder] = useState<any>(null);
 
     const [allLocalSongs, setAllLocalSongs] = useState<Song[]>([]);
     const [topHitsSongs, setTopHitsSongs] = useState<Song[]>([]);
@@ -47,6 +76,18 @@ const MyPlaylistsScreen = ({ navigation }: any) => {
     const [hasanSongs, setHasanSongs] = useState<Song[]>([]);
     const [talwinderSongs, setTalwinderSongs] = useState<Song[]>([]);
     const [kkSongs, setKkSongs] = useState<Song[]>([]);
+
+    const loadCustomPlaylists = async () => {
+        const playlists = await getCustomPlaylists();
+        setCustomPlaylists(playlists);
+    };
+
+    useEffect(() => {
+        loadCustomPlaylists();
+        return () => {
+            if (addSongDebounceRef.current) clearTimeout(addSongDebounceRef.current);
+        };
+    }, []);
 
     useEffect(() => {
         const loadAllSongs = async () => {
@@ -79,12 +120,21 @@ const MyPlaylistsScreen = ({ navigation }: any) => {
             setHasanSongs(apiHasan.length > 0 ? apiHasan : []);
             setTalwinderSongs(apiTalwinder.length > 0 ? apiTalwinder : []);
             setKkSongs(apiKK.length > 0 ? apiKK : []);
+
+            const uniqueSongs = new Map<string, Song>();
+            [...local, ...apiTopHits, ...apiElectronic, ...apiChill, ...apiWorkout, ...apiTrending,
+            ...apiArijit, ...apiTalha, ...apiHasan, ...apiTalwinder, ...apiKK].forEach(s => {
+                if (!uniqueSongs.has(s.id)) {
+                    uniqueSongs.set(s.id, s);
+                }
+            });
+            setAllAvailableSongs(Array.from(uniqueSongs.values()));
             setLoading(false);
         };
         loadAllSongs();
     }, []);
 
-    function calculateTotalDuration(songs: Song[]): string {
+    function calculateTotalDuration(songs: { duration: string }[]): string {
         let totalSeconds = 0;
         songs.forEach(song => {
             const parts = song.duration.split(':').map(Number);
@@ -117,7 +167,7 @@ const MyPlaylistsScreen = ({ navigation }: any) => {
     }, [topHitsSongs, electronicSongs, chillSongs, workoutSongs, trendingSongs, allLocalSongs, arijitSongs, talhaSongs, hasanSongs, talwinderSongs, kkSongs]);
 
     const playlists = useMemo(() => {
-        return [
+        const builtin = [
             {
                 id: '1',
                 name: 'Top Hits',
@@ -229,44 +279,218 @@ const MyPlaylistsScreen = ({ navigation }: any) => {
                 description: 'Full song library',
             },
         ];
-    }, [topHitsSongs, electronicSongs, chillSongs, workoutSongs, trendingSongs, allLocalSongs, arijitSongs, talhaSongs, hasanSongs, talwinderSongs, kkSongs]);
+
+        const custom = customPlaylists.map(cp => ({
+            id: cp.id,
+            name: cp.name,
+            songCount: cp.songs.length,
+            duration: calculateTotalDuration(cp.songs),
+            color: cp.color,
+            isPublic: false,
+            likes: 0,
+            description: cp.songs.length > 0 ? `${cp.songs.length} songs by you` : 'Tap + to add songs',
+            isCustom: true,
+            customPlaylist: cp,
+        }));
+
+        return [...custom, ...builtin];
+    }, [topHitsSongs, electronicSongs, chillSongs, workoutSongs, trendingSongs, allLocalSongs, arijitSongs, talhaSongs, hasanSongs, talwinderSongs, kkSongs, customPlaylists]);
 
     const [selectedFilter, setSelectedFilter] = useState('All');
 
     const filters = ['All', 'Public', 'Private', 'Most Liked'];
 
     const handleCreatePlaylist = () => {
+        setNewPlaylistName('');
+        setCreateModalVisible(true);
+    };
+
+    const handleCreatePlaylistConfirm = async () => {
+        const name = newPlaylistName.trim();
+        if (!name) {
+            Alert.alert('Error', 'Please enter a playlist name.');
+            return;
+        }
+        const duplicate = playlists.some(p => p.name.toLowerCase() === name.toLowerCase());
+        if (duplicate) {
+            Alert.alert('Error', 'A playlist with this name already exists.');
+            return;
+        }
+        const playlist = await createCustomPlaylist(name);
+        await loadCustomPlaylists();
+        setCreateModalVisible(false);
+        setNewlyCreatedPlaylist(playlist);
+        setSelectedSongIds(new Set());
+        setAddSongSearchQuery('');
+        setAddSongsModalVisible(true);
+    };
+
+    const toggleSongSelection = (songId: string) => {
+        setSelectedSongIds(prev => {
+            const next = new Set(prev);
+            if (next.has(songId)) {
+                next.delete(songId);
+            } else {
+                next.add(songId);
+            }
+            return next;
+        });
+    };
+
+    const handleSaveSelectedSongs = async () => {
+        if (!newlyCreatedPlaylist) return;
+        if (selectedSongIds.size === 0) {
+            Alert.alert('No songs selected', 'Select at least one song to add.');
+            return;
+        }
+        setIsSaving(true);
+        try {
+            const allSongsForLookup = new Map<string, Song>();
+            allAvailableSongs.forEach(s => allSongsForLookup.set(s.id, s));
+            addSongApiResults.forEach(s => {
+                if (!allSongsForLookup.has(s.id)) allSongsForLookup.set(s.id, s);
+            });
+
+            const songs: CustomPlaylistSong[] = Array.from(selectedSongIds)
+                .map(id => allSongsForLookup.get(id))
+                .filter((s): s is Song => s !== undefined)
+                .map(s => ({
+                    id: s.id,
+                    title: s.title,
+                    artist: s.artist,
+                    artwork: s.artwork || 'https://picsum.photos/seed/song/400',
+                    duration: s.duration,
+                    url: s.url,
+                    album: s.album,
+                }));
+            await addSongsToPlaylist(newlyCreatedPlaylist.id, songs);
+            await loadCustomPlaylists();
+            setAddSongsModalVisible(false);
+
+            // Close folder detail if open
+            if (folderDetailVisible) {
+                // Refresh the folder detail view
+                const updatedPlaylist = customPlaylists.find(p => p.id === newlyCreatedPlaylist.id);
+                if (updatedPlaylist) {
+                    setSelectedFolder({
+                        ...selectedFolder,
+                        customPlaylist: updatedPlaylist,
+                        songCount: updatedPlaylist.songs.length,
+                        duration: calculateTotalDuration(updatedPlaylist.songs),
+                        description: updatedPlaylist.songs.length > 0 ? `${updatedPlaylist.songs.length} songs by you` : 'Tap + to add songs',
+                    });
+                }
+            }
+
+            // Alert.alert('Done!', `${songs.length} songs added to "${newlyCreatedPlaylist.name}"`);
+            songs.forEach(s => {
+                downloadSong(s.id, s.url);
+            });
+        } catch {
+            Alert.alert('Error', 'Failed to add songs.');
+        }
+        setIsSaving(false);
+    };
+
+    // UPDATED: Handle add songs to existing playlist
+    const handleAddSongsToExisting = (playlist: any) => {
+        if (!playlist.isCustom) return;
+        setNewlyCreatedPlaylist(playlist.customPlaylist);
+        setSelectedSongIds(new Set());
+        setAddSongSearchQuery('');
+        setAddSongApiResults([]);
+        setAddSongsModalVisible(true);
+    };
+
+    const fetchAddSongApiSearch = useCallback(async (query: string) => {
+        if (!query.trim()) {
+            setAddSongApiResults([]);
+            return;
+        }
+        try {
+            setAddSongApiLoading(true);
+            const results = await searchSongsByName(query, 20);
+            setAddSongApiResults(results as Song[]);
+        } catch {
+            setAddSongApiResults([]);
+        } finally {
+            setAddSongApiLoading(false);
+        }
+    }, []);
+
+    const handleAddSongSearchChange = (text: string) => {
+        setAddSongSearchQuery(text);
+        if (addSongDebounceRef.current) clearTimeout(addSongDebounceRef.current);
+        addSongDebounceRef.current = setTimeout(() => {
+            fetchAddSongApiSearch(text);
+        }, 500);
+    };
+
+    const handleDeleteCustomPlaylist = (playlist: any) => {
         Alert.alert(
-            'Create Playlist',
-            'Enter playlist name:',
+            'Delete Playlist',
+            `Delete "${playlist.name}"?`,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
-                    text: 'Create',
-                    onPress: () => {
-                        Alert.alert('Success', 'Playlist created successfully!');
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        await deleteCustomPlaylist(playlist.id);
+                        await loadCustomPlaylists();
+                        if (folderDetailVisible) {
+                            setFolderDetailVisible(false);
+                            setSelectedFolder(null);
+                        }
                     },
                 },
             ],
         );
     };
 
+    const filteredAddSongs = useMemo(() => {
+        const query = addSongSearchQuery.trim();
+        if (!query) return allAvailableSongs;
+
+        const q = query.toLowerCase();
+        const localMatches = allAvailableSongs.filter(
+            s => s.title.toLowerCase().includes(q) ||
+                s.artist.toLowerCase().includes(q) ||
+                s.album.toLowerCase().includes(q)
+        );
+
+        const apiIds = new Set(localMatches.map(s => s.id));
+        const apiOnly = addSongApiResults.filter(s => !apiIds.has(s.id));
+
+        return [...localMatches, ...apiOnly];
+    }, [allAvailableSongs, addSongSearchQuery, addSongApiResults]);
+
     const playPlaylist = async (playlist: any) => {
-        const songs = songLibrary[playlist.name];
+        let songs: Song[] = [];
+
+        if (playlist.isCustom && playlist.customPlaylist) {
+            songs = playlist.customPlaylist.songs.map((s: any) => ({
+                ...s,
+                artwork: s.artwork || 'https://picsum.photos/seed/song/400',
+            }));
+        } else {
+            songs = songLibrary[playlist.name] || [];
+        }
+
         if (!songs || songs.length === 0) {
             Alert.alert('No Songs', 'This playlist has no songs to play yet.');
             return;
         }
         try {
-            const tracks = songs.map((s: Song) => ({
+            const tracks = await Promise.all(songs.map(async (s: any) => ({
                 id: s.id,
-                url: s.url,
+                url: await getOfflineUrl(s.id, s.url),
                 title: s.title,
                 artist: s.artist,
                 album: s.album,
                 duration: parseDuration(s.duration),
                 artwork: s.artwork,
-            }));
+            })));
 
             const currentActiveTrack = await TrackPlayer.getActiveTrack();
             if (currentActiveTrack && currentActiveTrack.id === tracks[0].id) {
@@ -287,7 +511,7 @@ const MyPlaylistsScreen = ({ navigation }: any) => {
         }
     };
 
-    const playSingleSong = async (song: Song, songs: Song[]) => {
+    const playSingleSong = async (song: any, songs: any[]) => {
         try {
             const currentActiveTrack = await TrackPlayer.getActiveTrack();
             if (currentActiveTrack && currentActiveTrack.id === song.id) {
@@ -299,15 +523,15 @@ const MyPlaylistsScreen = ({ navigation }: any) => {
                 return;
             }
 
-            const tracks = songs.map((s: Song) => ({
+            const tracks = await Promise.all(songs.map(async (s: any) => ({
                 id: s.id,
-                url: s.url,
+                url: await getOfflineUrl(s.id, s.url),
                 title: s.title,
                 artist: s.artist,
                 album: s.album,
                 duration: parseDuration(s.duration),
                 artwork: s.artwork,
-            }));
+            })));
 
             const songIndex = songs.findIndex(s => s.id === song.id);
 
@@ -331,9 +555,23 @@ const MyPlaylistsScreen = ({ navigation }: any) => {
         }
     };
 
-    const handlePlaylistPress = (playlist: any) => {
-        setCurrentPlaylist(playlist);
-        setSongsModalVisible(true);
+    // NEW: Handle folder press - open detail view
+    const handleFolderPress = (playlist: any) => {
+        if (playlist.isCustom) {
+            setSelectedFolder(playlist);
+            setFolderDetailVisible(true);
+        } else {
+            // For built-in playlists, open the existing modal
+            setCurrentPlaylist(playlist);
+            setSongsModalVisible(true);
+        }
+    };
+
+    // NEW: Handle add songs from folder detail
+    const handleAddSongsFromDetail = () => {
+        if (selectedFolder && selectedFolder.isCustom) {
+            handleAddSongsToExisting(selectedFolder);
+        }
     };
 
     const getFilteredPlaylists = () => {
@@ -358,54 +596,90 @@ const MyPlaylistsScreen = ({ navigation }: any) => {
     };
 
     const renderPlaylistItem = ({ item }: { item: any }) => {
-        const songs = songLibrary[item.name] || [];
+        let songs: any[] = [];
+        if (item.isCustom && item.customPlaylist) {
+            songs = item.customPlaylist.songs;
+        } else {
+            songs = songLibrary[item.name] || [];
+        }
         const firstSongArtwork = songs[0]?.artwork;
         const isCurrentPlaylist = currentPlaylist?.id === item.id && activeTrack;
 
         return (
             <TouchableOpacity
                 style={styles.playlistCard}
-                onPress={() => handlePlaylistPress(item)}
+                onPress={() => handleFolderPress(item)} // UPDATED: Use new handler
+                onLongPress={() => item.isCustom ? handleDeleteCustomPlaylist(item) : undefined}
                 activeOpacity={0.7}
             >
                 {firstSongArtwork ? (
                     <Image source={{ uri: firstSongArtwork }} style={styles.playlistArtwork} />
                 ) : (
-                    <View style={[styles.playlistArtwork, styles.playlistArtworkFallback]}>
-                        <Icon name="musical-notes" size={24} color="#1DB954" />
+                    <View style={[styles.playlistArtwork, styles.playlistArtworkFallback, { backgroundColor: item.color + '22' }]}>
+                        <Icon name={item.isCustom ? 'folder-open' : 'musical-notes'} size={24} color={item.color || '#1DB954'} />
                     </View>
                 )}
 
                 <View style={styles.playlistInfo}>
-                    <Text style={styles.playlistName} numberOfLines={1}>
-                        {item.name}
-                    </Text>
+                    <View style={styles.playlistNameRow}>
+                        <Text style={styles.playlistName} numberOfLines={1}>
+                            {item.name}
+                        </Text>
+                        {item.isCustom && (
+                            <View style={styles.customBadge}>
+                                <Text style={styles.customBadgeText}>YOURS</Text>
+                            </View>
+                        )}
+                    </View>
                     <Text style={styles.playlistMeta}>
                         {item.description} · {item.songCount} tracks
                     </Text>
                     <View style={styles.playlistStats}>
                         <Icon name="heart" size={12} color="#999" />
-                        <Text style={styles.playlistLikes}>{item.likes}</Text>
+                        <Text style={styles.playlistLikes}>{item.likes || 0}</Text>
                         <Text style={styles.playlistDot}>·</Text>
                         <Text style={styles.playlistDuration}>{item.duration}</Text>
                     </View>
                 </View>
 
-                <TouchableOpacity
-                    style={[styles.playButton, isCurrentPlaylist && styles.playButtonActive]}
-                    onPress={() => playPlaylist(item)}
-                >
-                    <Icon
-                        name={isCurrentPlaylist && isPlaying ? 'pause' : 'play'}
-                        size={18}
-                        color={isCurrentPlaylist && isPlaying ? '#FFFFFF' : '#FFFFFF'}
-                    />
-                </TouchableOpacity>
+                {item.isCustom ? (
+                    <TouchableOpacity
+                        style={styles.addSongButton}
+                        onPress={(e) => {
+                            e.stopPropagation(); // Prevent folder press
+                            handleAddSongsToExisting(item);
+                        }}
+                    >
+                        <Icon name="add" size={18} color="#1DB954" />
+                    </TouchableOpacity>
+                ) : (
+                    <TouchableOpacity
+                        style={[styles.playButton, isCurrentPlaylist && styles.playButtonActive]}
+                        onPress={(e) => {
+                            e.stopPropagation(); // Prevent folder press
+                            playPlaylist(item);
+                        }}
+                    >
+                        <Icon
+                            name={isCurrentPlaylist && isPlaying ? 'pause' : 'play'}
+                            size={18}
+                            color="#FFFFFF"
+                        />
+                    </TouchableOpacity>
+                )}
             </TouchableOpacity>
         );
     };
 
     const filteredPlaylists = getFilteredPlaylists();
+
+    const getPlaylistSongs = (): Song[] => {
+        if (!currentPlaylist) return [];
+        if (currentPlaylist.isCustom && currentPlaylist.customPlaylist) {
+            return currentPlaylist.customPlaylist.songs;
+        }
+        return songLibrary[currentPlaylist.name] || [];
+    };
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -413,15 +687,6 @@ const MyPlaylistsScreen = ({ navigation }: any) => {
 
             <View style={styles.container}>
                 <View style={styles.header}>
-                    {/* {navigation.canGoBack() && (
-                        <TouchableOpacity
-                            onPress={() => navigation.goBack()}
-                            style={styles.backButton}
-                            activeOpacity={0.7}
-                        >
-                            <Icon name="arrow-back" size={24} color="#ffffff" />
-                        </TouchableOpacity>
-                    )} */}
                     <Text style={styles.headerTitle}>Your Library</Text>
                     <TouchableOpacity style={styles.headerButton} onPress={handleCreatePlaylist}>
                         <Icon name="add" size={24} color="#FFFFFF" />
@@ -484,7 +749,7 @@ const MyPlaylistsScreen = ({ navigation }: any) => {
                         renderItem={renderPlaylistItem}
                         keyExtractor={(item) => item.id}
                         showsVerticalScrollIndicator={false}
-                        contentContainerStyle={styles.playlistsList}
+                        contentContainerStyle={[styles.playlistsList, { paddingBottom: 100 + miniPlayerHeight }]}
                         ItemSeparatorComponent={() => <View style={styles.separator} />}
                     />
                 ) : (
@@ -504,6 +769,7 @@ const MyPlaylistsScreen = ({ navigation }: any) => {
                     </View>
                 )}
 
+                {/* Existing Songs Modal (for built-in playlists) */}
                 <Modal
                     visible={songsModalVisible}
                     animationType="slide"
@@ -545,11 +811,11 @@ const MyPlaylistsScreen = ({ navigation }: any) => {
                             </TouchableOpacity>
 
                             <FlatList
-                                data={currentPlaylist ? (songLibrary[currentPlaylist.name] || []) : []}
+                                data={getPlaylistSongs()}
                                 keyExtractor={(item) => item.id}
                                 renderItem={({ item, index }) => {
                                     const isActive = activeTrack?.id === item.id;
-                                    const songs = currentPlaylist ? (songLibrary[currentPlaylist.name] || []) : [];
+                                    const songs = getPlaylistSongs();
                                     return (
                                         <TouchableOpacity
                                             style={[styles.songRow, isActive && styles.songRowActive]}
@@ -605,6 +871,304 @@ const MyPlaylistsScreen = ({ navigation }: any) => {
                         </View>
                     </View>
                 </Modal>
+
+                {/* NEW: Folder Detail Modal */}
+                <Modal
+                    visible={folderDetailVisible}
+                    animationType="slide"
+                    transparent={true}
+                    onRequestClose={() => {
+                        setFolderDetailVisible(false);
+                        setSelectedFolder(null);
+                    }}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            <View style={styles.modalHandle} />
+
+                            <View style={styles.modalHeader}>
+                                <View style={styles.modalHeaderInfo}>
+                                    <Text style={styles.modalTitle}>
+                                        {selectedFolder?.name}
+                                    </Text>
+                                    <Text style={styles.modalSubtitle}>
+                                        {selectedFolder?.description} · {selectedFolder?.songCount} tracks
+                                    </Text>
+                                </View>
+                                <View style={styles.modalHeaderActions}>
+                                    {/* Add Songs Button in Header */}
+                                    <TouchableOpacity
+                                        style={[styles.modalCloseBtn, styles.modalAddBtn]}
+                                        onPress={handleAddSongsFromDetail}
+                                    >
+                                        <Icon name="add" size={20} color="#1DB954" />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            setFolderDetailVisible(false);
+                                            setSelectedFolder(null);
+                                        }}
+                                        style={styles.modalCloseBtn}
+                                    >
+                                        <Icon name="close" size={22} color="#999" />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            {/* Play All Button */}
+                            <TouchableOpacity
+                                style={styles.modalPlayAllBtn}
+                                onPress={() => {
+                                    if (selectedFolder) playPlaylist(selectedFolder);
+                                }}
+                            >
+                                <Icon
+                                    name={isPlaying && selectedFolder ? 'pause' : 'play'}
+                                    size={20}
+                                    color="#FFFFFF"
+                                />
+                                <Text style={styles.modalPlayAllText}>
+                                    {isPlaying && selectedFolder ? 'Pause' : 'Play All'}
+                                </Text>
+                            </TouchableOpacity>
+
+                            {/* Add Songs Button Below Play All */}
+                            <TouchableOpacity
+                                style={[styles.modalPlayAllBtn, styles.addSongsBtn]}
+                                onPress={handleAddSongsFromDetail}
+                            >
+                                <Icon name="add-circle-outline" size={20} color="#1DB954" />
+                                <Text style={[styles.modalPlayAllText, styles.addSongsBtnText]}>
+                                    Add Songs to Playlist
+                                </Text>
+                            </TouchableOpacity>
+
+                            {/* Songs List */}
+                            <FlatList
+                                data={selectedFolder?.customPlaylist?.songs || []}
+                                keyExtractor={(item) => item.id}
+                                renderItem={({ item, index }) => {
+                                    const isActive = activeTrack?.id === item.id;
+                                    const songs = selectedFolder?.customPlaylist?.songs || [];
+                                    return (
+                                        <TouchableOpacity
+                                            style={[styles.songRow, isActive && styles.songRowActive]}
+                                            onPress={() => playSingleSong(item, songs)}
+                                        >
+                                            <View style={styles.songLeft}>
+                                                {isActive && isPlaying ? (
+                                                    <View style={styles.equalizer}>
+                                                        <View style={[styles.eqBar, { height: 12 }]} />
+                                                        <View style={[styles.eqBar, { height: 18 }]} />
+                                                        <View style={[styles.eqBar, { height: 8 }]} />
+                                                        <View style={[styles.eqBar, { height: 14 }]} />
+                                                    </View>
+                                                ) : (
+                                                    <Text style={[styles.songNumber, isActive && styles.songNumberActive]}>
+                                                        {index + 1}
+                                                    </Text>
+                                                )}
+                                            </View>
+                                            <Image source={{ uri: item.artwork }} style={styles.songArtwork} />
+                                            <View style={styles.songInfo}>
+                                                <Text style={[styles.songTitle, isActive && styles.songTitleActive]} numberOfLines={1}>
+                                                    {item.title}
+                                                </Text>
+                                                <Text style={styles.songArtist} numberOfLines={1}>
+                                                    {item.artist}
+                                                </Text>
+                                            </View>
+                                            <Text style={styles.songDuration}>{item.duration}</Text>
+                                            <TouchableOpacity
+                                                onPress={() => playSingleSong(item, songs)}
+                                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                                style={styles.songPlayBtn}
+                                            >
+                                                <Icon
+                                                    name={isActive && isPlaying ? 'pause' : 'play'}
+                                                    size={16}
+                                                    color={isActive ? '#1DB954' : '#888'}
+                                                />
+                                            </TouchableOpacity>
+                                        </TouchableOpacity>
+                                    );
+                                }}
+                                ItemSeparatorComponent={() => <View style={styles.songDivider} />}
+                                ListEmptyComponent={
+                                    <View style={styles.emptySongsContainer}>
+                                        <Icon name="musical-notes-outline" size={32} color="#333" />
+                                        <Text style={styles.emptySongsText}>
+                                            No songs in this playlist yet.
+                                        </Text>
+                                        <Text style={styles.emptySongsSubtext}>
+                                            Tap the + button to add songs
+                                        </Text>
+                                    </View>
+                                }
+                            />
+                        </View>
+                    </View>
+                </Modal>
+
+                {/* Step 1: Create Playlist Modal */}
+                <Modal
+                    visible={createModalVisible}
+                    animationType="slide"
+                    transparent={true}
+                    onRequestClose={() => setCreateModalVisible(false)}
+                >
+                    <KeyboardAvoidingView
+                        style={styles.modalOverlay}
+                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    >
+                        <View style={styles.createModalContent}>
+                            <View style={styles.modalHandle} />
+                            <View style={styles.createModalHeader}>
+                                <Text style={styles.createModalTitle}>New Playlist</Text>
+                                <TouchableOpacity onPress={() => setCreateModalVisible(false)} style={styles.modalCloseBtn}>
+                                    <Icon name="close" size={22} color="#999" />
+                                </TouchableOpacity>
+                            </View>
+                            <Text style={styles.createModalLabel}>Give your playlist a name</Text>
+                            <View style={styles.createInputWrapper}>
+                                <Icon name="musical-note" size={18} color="#1DB954" />
+                                <TextInput
+                                    style={styles.createInput}
+                                    placeholder="My Playlist"
+                                    placeholderTextColor="#555"
+                                    value={newPlaylistName}
+                                    onChangeText={setNewPlaylistName}
+                                    autoFocus
+                                    onSubmitEditing={handleCreatePlaylistConfirm}
+                                />
+                            </View>
+                            <TouchableOpacity
+                                style={[styles.createConfirmBtn, !newPlaylistName.trim() && styles.createConfirmBtnDisabled]}
+                                onPress={handleCreatePlaylistConfirm}
+                                disabled={!newPlaylistName.trim()}
+                                activeOpacity={0.7}
+                            >
+                                <Icon name="arrow-forward" size={20} color="#FFFFFF" />
+                                <Text style={styles.createConfirmBtnText}>Next: Add Songs</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </KeyboardAvoidingView>
+                </Modal>
+
+                {/* Step 2: Add Songs Modal */}
+                <Modal
+                    visible={addSongsModalVisible}
+                    animationType="slide"
+                    transparent={true}
+                    onRequestClose={() => setAddSongsModalVisible(false)}
+                >
+                    <KeyboardAvoidingView
+                        style={styles.modalOverlay}
+                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    >
+                        <View style={styles.addSongsModalContent}>
+                            <View style={styles.modalHandle} />
+                            <View style={styles.addSongsHeader}>
+                                <View style={styles.addSongsHeaderInfo}>
+                                    <Text style={styles.addSongsTitle}>Add Songs</Text>
+                                    <Text style={styles.addSongsSubtitle}>
+                                        to "{newlyCreatedPlaylist?.name}"
+                                    </Text>
+                                </View>
+                                <TouchableOpacity onPress={() => setAddSongsModalVisible(false)} style={styles.modalCloseBtn}>
+                                    <Icon name="close" size={22} color="#999" />
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={styles.addSongSearchContainer}>
+                                <Icon name="search-outline" size={16} color="#777" />
+                                <TextInput
+                                    style={styles.addSongSearchInput}
+                                    placeholder="Search songs..."
+                                    placeholderTextColor="#555"
+                                    value={addSongSearchQuery}
+                                    onChangeText={handleAddSongSearchChange}
+                                />
+                                {addSongSearchQuery.length > 0 && (
+                                    <TouchableOpacity onPress={() => setAddSongSearchQuery('')}>
+                                        <Icon name="close-circle" size={16} color="#555" />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+
+                            {addSongApiLoading && (
+                                <View style={styles.addSongApiLoading}>
+                                    <ActivityIndicator size="small" color="#1DB954" />
+                                    <Text style={styles.addSongApiLoadingText}>Searching online...</Text>
+                                </View>
+                            )}
+
+                            {selectedSongIds.size > 0 && (
+                                <View style={styles.selectedCountBar}>
+                                    <Icon name="checkmark-circle" size={16} color="#1DB954" />
+                                    <Text style={styles.selectedCountText}>
+                                        {selectedSongIds.size} song{selectedSongIds.size !== 1 ? 's' : ''} selected
+                                    </Text>
+                                </View>
+                            )}
+
+                            <FlatList
+                                data={filteredAddSongs}
+                                keyExtractor={(item) => item.id}
+                                renderItem={({ item }) => {
+                                    const isSelected = selectedSongIds.has(item.id);
+                                    return (
+                                        <TouchableOpacity
+                                            style={[styles.addSongRow, isSelected && styles.addSongRowSelected]}
+                                            onPress={() => toggleSongSelection(item.id)}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Image source={{ uri: item.artwork || 'https://picsum.photos/seed/song/400' }} style={styles.addSongArtwork} />
+                                            <View style={styles.addSongInfo}>
+                                                <Text style={[styles.addSongTitle, isSelected && styles.addSongTitleSelected]} numberOfLines={1}>
+                                                    {item.title}
+                                                </Text>
+                                                <Text style={styles.addSongArtist} numberOfLines={1}>
+                                                    {item.artist}
+                                                </Text>
+                                            </View>
+                                            <View style={[styles.addSongCheckbox, isSelected && styles.addSongCheckboxSelected]}>
+                                                {isSelected && <Icon name="checkmark" size={14} color="#FFFFFF" />}
+                                            </View>
+                                        </TouchableOpacity>
+                                    );
+                                }}
+                                ItemSeparatorComponent={() => <View style={styles.songDivider} />}
+                                ListEmptyComponent={
+                                    <View style={styles.emptySongsContainer}>
+                                        <Icon name="search-outline" size={32} color="#333" />
+                                        <Text style={styles.emptySongsText}>
+                                            {addSongSearchQuery ? 'No songs match your search' : 'No songs available'}
+                                        </Text>
+                                    </View>
+                                }
+                            />
+
+                            <TouchableOpacity
+                                style={[styles.saveSongsBtn, (selectedSongIds.size === 0 || isSaving) && styles.saveSongsBtnDisabled]}
+                                onPress={handleSaveSelectedSongs}
+                                disabled={selectedSongIds.size === 0 || isSaving}
+                                activeOpacity={0.7}
+                            >
+                                {isSaving ? (
+                                    <ActivityIndicator size="small" color="#FFFFFF" />
+                                ) : (
+                                    <>
+                                        <Icon name="checkmark-circle" size={20} color="#FFFFFF" />
+                                        <Text style={styles.saveSongsBtnText}>
+                                            Save {selectedSongIds.size} Song{selectedSongIds.size !== 1 ? 's' : ''}
+                                        </Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </KeyboardAvoidingView>
+                </Modal>
             </View>
         </SafeAreaView>
     );
@@ -636,12 +1200,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     headerTitle: {
-        fontSize: 24,
+        fontSize: 22,
         fontWeight: '800',
         color: '#FFFFFF',
         letterSpacing: -0.3,
         flex: 1,
-        textAlign: 'center',
+        textAlign: 'left',
     },
     headerButton: {
         width: 36,
@@ -838,6 +1402,11 @@ const styles = StyleSheet.create({
     modalHeaderInfo: {
         flex: 1,
     },
+    modalHeaderActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
     modalTitle: {
         color: colors.white,
         fontSize: 20,
@@ -857,6 +1426,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginLeft: 12,
     },
+    modalAddBtn: {
+        backgroundColor: 'rgba(29, 185, 84, 0.15)',
+        borderWidth: 1,
+        borderColor: '#1DB954',
+    },
     modalPlayAllBtn: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -872,6 +1446,15 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontSize: 15,
         fontWeight: '700',
+    },
+    addSongsBtn: {
+        backgroundColor: 'rgba(29, 185, 84, 0.1)',
+        borderWidth: 1,
+        borderColor: '#1DB954',
+        marginBottom: 8,
+    },
+    addSongsBtnText: {
+        color: '#1DB954',
     },
 
     songRow: {
@@ -952,6 +1535,233 @@ const styles = StyleSheet.create({
     emptySongsText: {
         color: '#666',
         fontSize: 14,
+        marginTop: 8,
+    },
+    emptySongsSubtext: {
+        color: '#555',
+        fontSize: 12,
+        marginTop: 4,
+    },
+
+    playlistNameRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 3,
+    },
+    customBadge: {
+        backgroundColor: colors.green,
+        paddingHorizontal: 6,
+        paddingVertical: 1,
+        borderRadius: 4,
+    },
+    customBadgeText: {
+        color: '#FFFFFF',
+        fontSize: 9,
+        fontWeight: '800',
+        letterSpacing: 0.5,
+    },
+    addSongButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#1A1A1A',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+
+    createModalContent: {
+        backgroundColor: '#121212',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        paddingBottom: 34,
+        paddingTop: 10,
+    },
+    createModalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        marginBottom: 8,
+    },
+    createModalTitle: {
+        color: colors.white,
+        fontSize: 20,
+        fontWeight: '800',
+    },
+    createModalLabel: {
+        color: '#888',
+        fontSize: 14,
+        paddingHorizontal: 20,
+        marginBottom: 16,
+    },
+    createInputWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#1A1A1A',
+        borderRadius: 10,
+        paddingHorizontal: 14,
+        marginHorizontal: 20,
+        marginBottom: 20,
+        height: 48,
+        gap: 10,
+    },
+    createInput: {
+        flex: 1,
+        color: '#FFFFFF',
+        fontSize: 16,
+        padding: 0,
+    },
+    createConfirmBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.green,
+        paddingVertical: 14,
+        marginHorizontal: 20,
+        borderRadius: 12,
+        gap: 8,
+    },
+    createConfirmBtnDisabled: {
+        opacity: 0.4,
+    },
+    createConfirmBtnText: {
+        color: '#FFFFFF',
+        fontSize: 15,
+        fontWeight: '700',
+    },
+
+    addSongsModalContent: {
+        backgroundColor: '#121212',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        paddingBottom: 34,
+        maxHeight: '90%',
+        minHeight: '70%',
+    },
+    addSongsHeader: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        marginBottom: 12,
+    },
+    addSongsHeaderInfo: {
+        flex: 1,
+    },
+    addSongsTitle: {
+        color: colors.white,
+        fontSize: 20,
+        fontWeight: '800',
+        marginBottom: 2,
+    },
+    addSongsSubtitle: {
+        color: '#888',
+        fontSize: 13,
+    },
+    addSongSearchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#151515',
+        borderRadius: 10,
+        paddingHorizontal: 14,
+        marginHorizontal: 20,
+        marginBottom: 8,
+        height: 40,
+        gap: 8,
+    },
+    addSongSearchInput: {
+        flex: 1,
+        color: '#FFFFFF',
+        fontSize: 14,
+        padding: 0,
+    },
+    selectedCountBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 8,
+        gap: 6,
+    },
+    selectedCountText: {
+        color: '#1DB954',
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    addSongRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 8,
+    },
+    addSongRowSelected: {
+        backgroundColor: 'rgba(29, 185, 84, 0.08)',
+    },
+    addSongArtwork: {
+        width: 42,
+        height: 42,
+        borderRadius: 4,
+        backgroundColor: '#1A1A1A',
+    },
+    addSongInfo: {
+        flex: 1,
+        marginLeft: 12,
+    },
+    addSongTitle: {
+        color: '#FFFFFF',
+        fontSize: 14,
+        fontWeight: '600',
+        marginBottom: 2,
+    },
+    addSongTitleSelected: {
+        color: '#1DB954',
+    },
+    addSongArtist: {
+        color: '#888',
+        fontSize: 12,
+    },
+    addSongCheckbox: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        borderWidth: 2,
+        borderColor: '#444',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    addSongCheckboxSelected: {
+        backgroundColor: '#1DB954',
+        borderColor: '#1DB954',
+    },
+    saveSongsBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.green,
+        paddingVertical: 14,
+        marginHorizontal: 20,
+        marginTop: 8,
+        borderRadius: 12,
+        gap: 8,
+    },
+    saveSongsBtnDisabled: {
+        opacity: 0.4,
+    },
+    saveSongsBtnText: {
+        color: '#FFFFFF',
+        fontSize: 15,
+        fontWeight: '700',
+    },
+    addSongApiLoading: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 6,
+        gap: 8,
+    },
+    addSongApiLoadingText: {
+        color: '#888',
+        fontSize: 12,
     },
 });
 

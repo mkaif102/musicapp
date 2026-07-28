@@ -35,9 +35,19 @@ export const PlaybackService = async () => {
 
     TrackPlayer.addEventListener(Event.RemoteStop, async () => {
         try {
-            await TrackPlayer.reset(); 
+            await TrackPlayer.reset();
         } catch (e) {
             console.log('Playback error in stop event:', e);
+        }
+    });
+
+    TrackPlayer.addEventListener(Event.RemoteDuck, async ({ paused }) => {
+        try {
+            if (paused) {
+                await TrackPlayer.pause();
+            }
+        } catch (e) {
+            console.log('Playback error in duck event:', e);
         }
     });
 };

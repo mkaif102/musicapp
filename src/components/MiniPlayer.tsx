@@ -16,6 +16,8 @@ import TrackPlayer, {
 } from 'react-native-track-player';
 import { colors } from '../theme/Colors';
 
+export const MINI_PLAYER_HEIGHT = 80;
+
 const MiniPlayerContent = () => {
     const navigation = useNavigation<any>();
     const route = useRoute();
@@ -23,7 +25,6 @@ const MiniPlayerContent = () => {
     const playbackState = usePlaybackState();
     const isPlaying = playbackState?.state === State.Playing;
 
-    // Animation values for equalizer bars
     const barHeights = useRef([
         new Animated.Value(8),
         new Animated.Value(16),
@@ -36,7 +37,6 @@ const MiniPlayerContent = () => {
         let animations: Animated.CompositeAnimation[] = [];
 
         if (isPlaying) {
-            // Start equalizer animation
             animations = barHeights.map((bar) => {
                 return Animated.loop(
                     Animated.sequence([
@@ -61,7 +61,6 @@ const MiniPlayerContent = () => {
 
             animations.forEach(anim => anim.start());
         } else {
-            // Reset bars to default height
             barHeights.forEach((bar) => {
                 Animated.timing(bar, {
                     toValue: 8,
@@ -78,7 +77,8 @@ const MiniPlayerContent = () => {
 
     if (!activeTrack || route.name === 'SongDetail') return null;
 
-    const handlePlayPause = async () => {
+    const handlePlayPause = async (e: any) => {
+        e.stopPropagation();
         try {
             if (isPlaying) {
                 await TrackPlayer.pause();
@@ -90,7 +90,8 @@ const MiniPlayerContent = () => {
         }
     };
 
-    const handleClose = async () => {
+    const handleClose = async (e: any) => {
+        e.stopPropagation();
         try {
             await TrackPlayer.stop();
             await TrackPlayer.reset();
@@ -142,25 +143,40 @@ const MiniPlayerContent = () => {
     };
 
     return (
-        <TouchableOpacity
-            style={styles.container}
-            onPress={handleTap}
-            activeOpacity={0.9}
-        >
-
+        <View style={styles.container}>
             <View style={styles.content}>
-                <Image
-                    source={{ uri: (activeTrack.artwork as string) || 'https://picsum.photos/seed/song/100' }}
-                    style={styles.artwork}
-                />
-                <View style={styles.info}>
+                <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={handlePlayPause}
+                    style={styles.imageContainer}
+                >
+                    <Image
+                        source={{ uri: (activeTrack.artwork as string) || 'https://picsum.photos/seed/song/100' }}
+                        style={styles.artwork}
+                    />
+
+                    <View style={styles.playOverlay}>
+                        <Icon
+                            name={isPlaying ? 'pause' : 'play'}
+                            size={24}
+                            color="#1DB954"
+                        />
+                    </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={styles.info}
+                    onPress={handleTap}
+                    activeOpacity={0.8}
+                >
                     <Text style={styles.title} numberOfLines={1}>
                         {activeTrack.title || 'Unknown'}
                     </Text>
                     <Text style={styles.artist} numberOfLines={1}>
                         {activeTrack.artist || 'Unknown Artist'}
                     </Text>
-                </View>
+                </TouchableOpacity>
+
                 {isPlaying ? (
                     <View style={styles.equalizerContainer}>
                         <Animated.View style={[styles.equalizerBar, { height: barHeights[0] }]} />
@@ -170,32 +186,20 @@ const MiniPlayerContent = () => {
                         <Animated.View style={[styles.equalizerBar, { height: barHeights[4] }]} />
                     </View>
                 ) : null}
-                <View style={styles.controls}>
-                    <TouchableOpacity
-                        style={styles.playButton}
-                        onPress={handlePlayPause}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    >
-                        <Icon
-                            name={isPlaying ? 'pause' : 'play'}
-                            size={20}
-                            color="#FFFFFF"
-                        />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.closeButton}
-                        onPress={handleClose}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    >
-                        <Icon
-                            name="close"
-                            size={16}
-                            color="#FFFFFF"
-                        />
-                    </TouchableOpacity>
-                </View>
+
+                <TouchableOpacity
+                    style={styles.closeButton}
+                    onPress={handleClose}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                    <Icon
+                        name="close"
+                        size={16}
+                        color="#FFFFFF"
+                    />
+                </TouchableOpacity>
             </View>
-        </TouchableOpacity>
+        </View>
     );
 };
 
@@ -237,11 +241,25 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
     },
+    imageContainer: {
+        position: 'relative',
+    },
     artwork: {
         width: 48,
         height: 48,
         borderRadius: 8,
         backgroundColor: '#2A2A2A',
+    },
+    playOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     info: {
         flex: 1,
@@ -273,11 +291,6 @@ const styles = StyleSheet.create({
         backgroundColor: colors.green,
         borderRadius: 2,
     },
-    controls: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-    },
     closeButton: {
         width: 32,
         height: 32,
@@ -287,19 +300,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.05)',
-    },
-    playButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: colors.green,
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: colors.green,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 4,
     },
 });
 

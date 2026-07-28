@@ -15,11 +15,13 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../context/AuthContext';
 import { colors } from '../../theme/Colors';
+import { useMiniPlayerHeight } from '../../hooks/useMiniPlayerHeight';
 
 const SettingsScreen = ({ navigation }: any) => {
     const { userData, logout } = useAuth();
     const [userName, setUserName] = useState('John Doe');
     const [userEmail, setUserEmail] = useState('john.doe@example.com');
+    const miniPlayerHeight = useMiniPlayerHeight();
 
     const [settings, setSettings] = useState({
         darkMode: false,
@@ -89,7 +91,7 @@ const SettingsScreen = ({ navigation }: any) => {
 
                 <ScrollView
                     showsVerticalScrollIndicator={false}
-                    contentContainerStyle={styles.scrollContent}
+                    contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + miniPlayerHeight }]}
                 >
                     {/* <View style={styles.profileCard}>
                         <View style={styles.avatar}>
@@ -268,7 +270,7 @@ const styles = StyleSheet.create({
         flex: 1
     },
     scrollContent: {
-        paddingBottom: 40,
+        paddingBottom: 0,
     },
     profileCard: {
         flexDirection: 'row',

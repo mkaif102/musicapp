@@ -52,7 +52,8 @@ const LikedSongsScreen = ({ navigation }: any) => {
 
     const handlePlaySong = async (song: LikedSong, index: number) => {
         try {
-            const isCurrentSong = activeTrack?.url === song.url;
+            const playUrl = song.cachedPath || song.url;
+            const isCurrentSong = activeTrack?.url === playUrl || activeTrack?.url === song.url;
             if (isCurrentSong) {
                 if (isPlaying) {
                     await TrackPlayer.pause();
@@ -65,7 +66,7 @@ const LikedSongsScreen = ({ navigation }: any) => {
             await TrackPlayer.add(
                 likedSongs.map((s) => ({
                     id: s.id,
-                    url: s.url,
+                    url: s.cachedPath || s.url,
                     title: s.title,
                     artist: s.artist,
                     artwork: s.artwork,
@@ -86,7 +87,7 @@ const LikedSongsScreen = ({ navigation }: any) => {
             await TrackPlayer.add(
                 likedSongs.map((s) => ({
                     id: s.id,
-                    url: s.url,
+                    url: s.cachedPath || s.url,
                     title: s.title,
                     artist: s.artist,
                     artwork: s.artwork,
@@ -114,7 +115,7 @@ const LikedSongsScreen = ({ navigation }: any) => {
     };
 
     const renderSong = ({ item, index }: { item: LikedSong; index: number }) => {
-        const isActive = activeTrack?.url === item.url;
+        const isActive = activeTrack?.url === (item.cachedPath || item.url) || activeTrack?.url === item.url;
         const isCurrentPlaying = isActive && isPlaying;
         const waveform = generateWaveform(index + 1);
 

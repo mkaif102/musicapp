@@ -26,12 +26,14 @@ import {
     ImageLibraryOptions,
 } from 'react-native-image-picker';
 import { colors } from '../../theme/Colors';
+import { useMiniPlayerHeight } from '../../hooks/useMiniPlayerHeight';
 
 const ProfileScreen = ({ navigation }: any) => {
     const insets = useSafeAreaInsets();
     const { logout, userData: authUserData } = useAuth();
     const [profileImage, setProfileImage] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
+    const miniPlayerHeight = useMiniPlayerHeight();
 
     useEffect(() => {
         loadProfileImage();
@@ -254,10 +256,10 @@ const ProfileScreen = ({ navigation }: any) => {
 
     const menuItems = [
         { id: '1', icon: 'person-outline', label: 'Edit Profile', screen: 'EditProfile' },
-        { id: '2', icon: 'list-outline', label: 'My Playlists', screen: 'MyPlaylists' },
+        { id: '2', icon: 'list-outline', label: 'My Playlists', screen: 'UserPlaylists' },
         { id: '3', icon: 'heart-outline', label: 'Likes', screen: 'LikedSongs' },
         { id: '4', icon: 'time-outline', label: 'Listening History', screen: 'RecentlyPlayed' },
-        { id: '5', icon: 'settings-outline', label: 'Settings', screen: 'Settings' },
+        // { id: '5', icon: 'settings-outline', label: 'Settings', screen: 'Settings' },
     ];
 
     return (
@@ -268,7 +270,7 @@ const ProfileScreen = ({ navigation }: any) => {
                 <Text style={styles.headerTitle}>Profile</Text>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + miniPlayerHeight }]}>
                 {/* <View style={styles.banner}>
                     <View style={styles.bannerOverlay} />
                 </View> */}
@@ -367,7 +369,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         textAlign: 'center',
         color: colors.white,
-        fontSize: 24,
+        fontSize: 22,
         fontWeight: '700',
     },
     scrollContent: {

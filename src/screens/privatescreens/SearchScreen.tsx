@@ -568,7 +568,7 @@ const SearchScreen = ({ navigation }: any) => {
                     </TouchableOpacity>
                     {searchQuery.length > 0 && (
                         <TouchableOpacity onPress={clearSearch} style={styles.clearButton}>
-                            <Icon name="close-circle" size={26} color="#666" />
+                            <Icon name="close-circle" size={32} color="#666" />
                         </TouchableOpacity>
                     )}
                 </View>

@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import TrackPlayer from 'react-native-track-player';
+import TrackPlayer, { usePlaybackState, State, useActiveTrack } from 'react-native-track-player';
 import { useFocusEffect } from '@react-navigation/native';
 import {
     songToTrack,
@@ -26,6 +26,8 @@ import {
     getSongByName,
     getFeaturedPlaylists,
 } from '../../data/songs';
+import { searchSongsByName } from '../../services/jiosaavn';
+import { useMiniPlayerHeight } from '../../hooks/useMiniPlayerHeight';
 import {
     saveToRecentlyPlayed,
     getRecentlyPlayed,
@@ -52,11 +54,13 @@ interface RecentItem {
     artist: string;
     artwork?: string;
     songRef: string;
+    url: string;
 }
 
 interface RadioStation {
     stationuuid: string;
     name: string;
+    url: string;
     url_resolved: string;
     favicon: string;
     tags: string;
@@ -66,39 +70,53 @@ interface RadioStation {
     lastcheckok: number;
 }
 
-const GENRE_EMOJI: { [key: string]: string } = {
-    'Hip-Hop': '🎤',
-    'Pop': '🎵',
-    'Sad': '😢',
-    'Romantic': '❤️',
-    'Lofi': '🎧',
-    'Party': '🎉',
-    'Ambient': '🌊',
-    'Workout': '💪',
-    'Focus': '🎯',
-    'Meditation': '🧘',
-    'Electronic': '⚡',
-    'Classical': '🎻',
-    'Other': '🎶',
-};
-
 const MOOD_EMOJI: { [key: string]: string } = {
-    'Defiant': '😤',
-    'Melancholy': '🌧️',
-    'Chill': '❄️',
-    'Energizing': '⚡',
-    'Romantic': '❤️',
-    'Peaceful': '☮️',
-    'Sad': '😢',
-    'Fun': '🎉',
-    'Focused': '🎯',
-    'Rowdy': '🔥',
-    'Uplifting': '☀️',
-    'Happy': '😊',
-    'Unknown': '🎵',
+    'Defiant': '',
+    'Melancholy': '',
+    'Chill': '',
+    'Energizing': '',
+    'Romantic': '',
+    'Peaceful': '',
+    'Sad': '',
+    'Fun': '',
+    'Focused': '',
+    'Rowdy': '',
+    'Uplifting': '',
+    'Happy': '',
+    'Unknown': '',
 };
 
-const COLORS = ['#FF6B6B', '#6C63FF', '#4ECDC4', '#FFA07A', '#FFD93D', '#FF6B9D'];
+const COLORS = ['#1DB954', '#1DB954', '#1DB954', '#1DB954', '#1DB954', '#1DB954'];
+
+const MOOD_COLORS: { [key: string]: string } = {
+    'Chill': '#1DB954',
+    'Energizing': '#1DB954',
+    'Peaceful': '#1DB954',
+    'Uplifting': '#1DB954',
+    'Happy': '#1DB954',
+    'Rowdy': '#1DB954',
+    'Defiant': '#1DB954',
+    'Romantic': '#1DB954',
+    'Focused': '#1DB954',
+    'Fun': '#1DB954',
+    'Melancholy': '#1DB954',
+    'Unknown': '#1DB954',
+};
+
+const MOOD_IMAGES: { [key: string]: string } = {
+    'Chill': 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?q=80&w=400&auto=format&fit=crop',
+    'Energizing': 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=400&auto=format&fit=crop',
+    'Peaceful': 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=400&auto=format&fit=crop',
+    'Uplifting': 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=400&auto=format&fit=crop',
+    'Happy': 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=400&auto=format&fit=crop',
+    'Rowdy': 'https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?q=80&w=400&auto=format&fit=crop',
+    'Defiant': 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=400&auto=format&fit=crop',
+    'Romantic': 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?q=80&w=400&auto=format&fit=crop',
+    'Focused': 'https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=400&auto=format&fit=crop',
+    'Fun': 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?q=80&w=400&auto=format&fit=crop',
+    'Melancholy': 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=400&auto=format&fit=crop',
+    'Unknown': 'https://images.unsplash.com/photo-1516280440614-37939bbacd6a?q=80&w=400&auto=format&fit=crop',
+};
 
 const CATEGORIES = [
     { id: '1', title: 'Music' },
@@ -120,12 +138,6 @@ const RADIO_IMAGES = [
     'https://images.unsplash.com/photo-1516280440614-37939bbacd6a?q=80&w=200&auto=format&fit=crop',
     'https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?q=80&w=200&auto=format&fit=crop',
     'https://images.unsplash.com/photo-1487180142328-054b783fc471?q=80&w=200&auto=format&fit=crop',
-];
-
-const MIXES_IMAGES = [
-    'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=300&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1484755560693-a4074577af3a?q=80&w=300&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?q=80&w=300&auto=format&fit=crop',
 ];
 
 const PODCAST_IMAGES = [
@@ -157,6 +169,12 @@ const HomeScreen = ({ navigation }: any) => {
     const [activeCategory, setActiveCategory] = useState('Music');
     const [radioStations, setRadioStations] = useState<RadioStation[]>([]);
     const [recentPlayedSongs, setRecentPlayedSongs] = useState<RecentSong[]>([]);
+    const [selectedMood, setSelectedMood] = useState<string | null>(null);
+    const [moodApiSongs, setMoodApiSongs] = useState<{ [mood: string]: Song[] }>({});
+    const [moodLoading, setMoodLoading] = useState(false);
+    const activeTrack = useActiveTrack();
+    const playbackState = usePlaybackState();
+    const miniPlayerHeight = useMiniPlayerHeight();
 
     useEffect(() => {
         loadUserData();
@@ -194,6 +212,32 @@ const HomeScreen = ({ navigation }: any) => {
             }
         };
         fetchRadioStations();
+    }, []);
+
+    useEffect(() => {
+        const fetchAllMoodSongs = async () => {
+            const moodNames = moods.map(m => m.name);
+            const results: { [mood: string]: Song[] } = {};
+            const batches = [];
+            for (let i = 0; i < moodNames.length; i += 3) {
+                batches.push(moodNames.slice(i, i + 3));
+            }
+            for (const batch of batches) {
+                const batchResults = await Promise.allSettled(
+                    batch.map(async (mood) => {
+                        const songs = await searchSongsByName(mood, 15);
+                        return { mood, songs };
+                    })
+                );
+                batchResults.forEach(result => {
+                    if (result.status === 'fulfilled' && result.value.songs.length > 0) {
+                        results[result.value.mood] = result.value.songs;
+                    }
+                });
+            }
+            setMoodApiSongs(results);
+        };
+        fetchAllMoodSongs();
     }, []);
 
     const loadUserData = async () => {
@@ -237,6 +281,7 @@ const HomeScreen = ({ navigation }: any) => {
                 artist: song.artist || 'Unknown Artist',
                 artwork: song.artwork || PLAYLIST_IMAGES[idx % PLAYLIST_IMAGES.length],
                 songRef: song.title,
+                url: song.url,
             }));
         }
         return allSongs.slice(0, 8).map((song, idx) => ({
@@ -245,6 +290,7 @@ const HomeScreen = ({ navigation }: any) => {
             artist: song.artist || 'Unknown Artist',
             artwork: song.artwork || PLAYLIST_IMAGES[idx % PLAYLIST_IMAGES.length],
             songRef: song.title,
+            url: song.url,
         }));
     }, [recentPlayedSongs, allSongs]);
 
@@ -265,6 +311,49 @@ const HomeScreen = ({ navigation }: any) => {
         });
         return filtered.length > 0 ? filtered : allSongs.slice(0, 6);
     }, [allSongs]);
+
+    const moodSongs = useMemo(() => {
+        if (!selectedMood) return [];
+        if (moodApiSongs[selectedMood]?.length > 0) {
+            return moodApiSongs[selectedMood];
+        }
+        return allSongs.filter(s => (s.mood || 'Chill') === selectedMood);
+    }, [allSongs, selectedMood, moodApiSongs]);
+
+    const fetchMoodSongs = async (mood: string) => {
+        if (moodApiSongs[mood]?.length > 0) return;
+        try {
+            setMoodLoading(true);
+            const songs = await searchSongsByName(mood, 20);
+            if (songs.length > 0) {
+                setMoodApiSongs(prev => ({ ...prev, [mood]: songs }));
+            }
+        } catch (error) {
+            console.log('Error fetching mood songs:', error);
+        } finally {
+            setMoodLoading(false);
+        }
+    };
+
+    const handleMoodPress = async (mood: string) => {
+        const color = MOOD_COLORS[mood] || '#1DB954';
+        const cachedSongs = moodApiSongs[mood];
+        if (cachedSongs && cachedSongs.length > 0) {
+            navigation.navigate('MoodDetail', { moodName: mood, moodColor: color, songs: cachedSongs });
+        } else {
+            try {
+                setMoodLoading(true);
+                const songs = await searchSongsByName(mood, 20);
+                setMoodApiSongs(prev => ({ ...prev, [mood]: songs }));
+                navigation.navigate('MoodDetail', { moodName: mood, moodColor: color, songs });
+            } catch {
+                const localSongs = allSongs.filter(s => (s.mood || 'Chill') === mood);
+                navigation.navigate('MoodDetail', { moodName: mood, moodColor: color, songs: localSongs });
+            } finally {
+                setMoodLoading(false);
+            }
+        }
+    };
 
     const playPlaylist = async (tracks: Song[]) => {
         if (!tracks || tracks.length === 0) return;
@@ -311,41 +400,34 @@ const HomeScreen = ({ navigation }: any) => {
         }
     };
 
-    const renderRecentItem = ({ item }: { item: RecentItem }) => (
-        <TouchableOpacity
-            style={styles.recentCard}
-            activeOpacity={0.8}
-            onPress={() => {
-                const fullSong = getSongByName(item.songRef);
-                if (fullSong) {
-                    navigation.navigate('SongDetail', {
-                        song: {
-                            title: fullSong.title,
-                            artist: fullSong.artist,
-                            artwork: fullSong.artwork || 'https://picsum.photos/seed/song/400',
-                            duration: fullSong.duration,
-                            likes: fullSong.play_count || 0,
-                            album: fullSong.album,
-                            genre: fullSong.genre,
-                            url: fullSong.url,
-                        },
-                    });
-                }
-            }}
-        >
-            <View style={styles.recentImageContainer}>
-                {item.artwork ? (
-                    <Image source={{ uri: item.artwork }} style={styles.recentArt} />
-                ) : (
-                    <View style={styles.fallbackArtContainer}>
-                        <Icon name="musical-notes-outline" size={30} color="#888888" />
+    const renderRecentItem = ({ item }: { item: RecentItem }) => {
+        const isActive = activeTrack?.url === item.url;
+        const isPlaying = isActive && playbackState.state === State.Playing;
+        return (
+            <TouchableOpacity
+                style={[styles.recentCard, isActive && { opacity: 1 }]}
+                activeOpacity={0.8}
+                onPress={() => playRecentSong(item)}
+            >
+                <View style={[styles.recentImageContainer, isActive && { borderWidth: 2, borderColor: '#1DB954' }]}>
+                    {item.artwork ? (
+                        <Image source={{ uri: item.artwork }} style={styles.recentArt} />
+                    ) : (
+                        <View style={styles.fallbackArtContainer}>
+                            <Icon name="musical-notes-outline" size={30} color="#888888" />
+                        </View>
+                    )}
+                    <View style={styles.recentPlayOverlay}>
+                        <View style={[styles.recentPlayBtn, isActive && { backgroundColor: '#1DB954' }]}>
+                            <Icon name={isPlaying ? 'pause' : 'play'} size={18} color="#FFFFFF" />
+                        </View>
                     </View>
-                )}
-            </View>
-            <Text style={styles.recentTitle} numberOfLines={1}>{item.title}</Text>
-            <Text style={styles.recentArtist} numberOfLines={1}>{item.artist}</Text>
-        </TouchableOpacity>
-    );
+                </View>
+                <Text style={[styles.recentTitle, isActive && { color: '#1DB954' }]} numberOfLines={1}>{item.title}</Text>
+                <Text style={styles.recentArtist} numberOfLines={1}>{item.artist}</Text>
+            </TouchableOpacity>
+        );
+    };
 
     const renderArtistItem = ({ item }: { item: Artist }) => {
         const imageUrl = artistImages[item.name];
@@ -373,18 +455,85 @@ const HomeScreen = ({ navigation }: any) => {
         );
     };
 
-    const renderSongItem = (song: Song, index: number, accent: string) => (
-        <TouchableOpacity key={song.id} style={styles.songRow} activeOpacity={0.8} onPress={() => playSong(song)}>
-            <Image source={{ uri: song.artwork || 'https://picsum.photos/seed/song/200' }} style={styles.songRowImage} />
-            <View style={styles.songRowInfo}>
-                <Text style={styles.songRowTitle} numberOfLines={1}>{song.title}</Text>
-                <Text style={styles.songRowArtist} numberOfLines={1}>{song.artist}</Text>
-            </View>
-            <TouchableOpacity style={[styles.songRowPlay, { backgroundColor: accent }]} onPress={() => playSong(song)}>
-                <Icon name="play" size={14} color="#FFFFFF" />
+    const togglePlayPause = async (song: Song) => {
+        const isCurrentTrack = activeTrack?.url === song.url || activeTrack?.id === song.id;
+        if (isCurrentTrack) {
+            if (playbackState.state === State.Playing) {
+                await TrackPlayer.pause();
+            } else if (playbackState.state === State.Paused) {
+                await TrackPlayer.play();
+            }
+        } else {
+            await playSong(song);
+        }
+    };
+
+    const playRecentSong = async (item: RecentItem) => {
+        const isCurrentTrack = activeTrack?.url === item.url;
+        if (isCurrentTrack) {
+            if (playbackState.state === State.Playing) {
+                await TrackPlayer.pause();
+            } else if (playbackState.state === State.Paused) {
+                await TrackPlayer.play();
+            }
+        } else {
+            const fullSong = getSongByName(item.songRef);
+            if (fullSong) {
+                try {
+                    await saveToRecentlyPlayed({
+                        id: fullSong.id,
+                        title: fullSong.title,
+                        artist: fullSong.artist,
+                        album: fullSong.album,
+                        duration: fullSong.duration,
+                        url: fullSong.url,
+                        artwork: fullSong.artwork || 'https://picsum.photos/seed/song/400',
+                    });
+                    await TrackPlayer.reset();
+                    await TrackPlayer.add(songToTrack(fullSong));
+                    await TrackPlayer.play();
+                } catch (error) {
+                    console.log(error);
+                }
+            } else if (item.url) {
+                try {
+                    await TrackPlayer.reset();
+                    await TrackPlayer.add({
+                        id: item.id || item.songRef,
+                        url: item.url,
+                        title: item.title,
+                        artist: item.artist,
+                        artwork: item.artwork || 'https://picsum.photos/seed/song/400',
+                    });
+                    await TrackPlayer.play();
+                } catch (error) {
+                    console.log(error);
+                }
+            }
+        }
+    };
+
+    const renderSongItem = (song: Song, index: number, accent: string) => {
+        const isActive = activeTrack?.url === song.url || activeTrack?.id === song.id;
+        const isPlaying = isActive && playbackState.state === State.Playing;
+        return (
+            <TouchableOpacity
+                key={song.id}
+                style={[styles.songRow, isActive && { backgroundColor: accent + '18' }]}
+                activeOpacity={0.8}
+                onPress={() => togglePlayPause(song)}
+            >
+                <Image source={{ uri: song.artwork || 'https://picsum.photos/seed/song/200' }} style={styles.songRowImage} />
+                <View style={styles.songRowInfo}>
+                    <Text style={[styles.songRowTitle, isActive && { color: accent }]} numberOfLines={1}>{song.title}</Text>
+                    <Text style={styles.songRowArtist} numberOfLines={1}>{song.artist}</Text>
+                </View>
+                <View style={[styles.songRowPlay, { backgroundColor: isActive ? accent : accent + 'CC' }]}>
+                    <Icon name={isPlaying ? 'pause' : 'play'} size={14} color="#FFFFFF" />
+                </View>
             </TouchableOpacity>
-        </TouchableOpacity>
-    );
+        );
+    };
 
     const renderMusicCategory = () => (
         <>
@@ -422,7 +571,7 @@ const HomeScreen = ({ navigation }: any) => {
                     </TouchableOpacity>
                 </View>
                 <FlatList
-                    data={recentPlayed}
+                    data={recentPlayed.slice(0, 10)}
                     renderItem={renderRecentItem}
                     keyExtractor={(item) => item.id}
                     horizontal
@@ -447,26 +596,60 @@ const HomeScreen = ({ navigation }: any) => {
 
             <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Made For You</Text>
+                    <Text style={styles.sectionTitle}>Mood Based</Text>
+                    <TouchableOpacity onPress={() => {
+                        const allMoodSongs: Song[] = [];
+                        Object.values(moodApiSongs).forEach(songs => allMoodSongs.push(...songs));
+                        if (allMoodSongs.length === 0) {
+                            moods.forEach(mood => {
+                                const localSongs = allSongs.filter(s => (s.mood || 'Chill') === mood.name);
+                                allMoodSongs.push(...localSongs);
+                            });
+                        }
+                        navigation.navigate('MoodDetail', {
+                            moodName: 'All Moods',
+                            moodColor: '#1DB954',
+                            songs: allMoodSongs,
+                        });
+                    }} activeOpacity={0.7}>
+                        <Text style={styles.seeAll}>See All</Text>
+                    </TouchableOpacity>
                 </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
-                    <TouchableOpacity style={styles.mixCard} activeOpacity={0.8} onPress={() => playPlaylist(allSongs)}>
-                        <Image source={{ uri: MIXES_IMAGES[0] }} style={styles.mixImage} />
-                        <Text style={styles.mixTitle}>Daily Mix 1</Text>
-                        <Text style={styles.mixSubtitle}>Hip Hop and Lo-fi mixes curated for your day.</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.mixCard} activeOpacity={0.8} onPress={() => playPlaylist(allSongs)}>
-                        <Image source={{ uri: MIXES_IMAGES[1] }} style={styles.mixImage} />
-                        <Text style={styles.mixTitle}>Daily Mix 2</Text>
-                        <Text style={styles.mixSubtitle}>Pop and energetic acoustic session.</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.mixCard} activeOpacity={0.8} onPress={() => playPlaylist(allSongs)}>
-                        <Image source={{ uri: MIXES_IMAGES[2] }} style={styles.mixImage} />
-                        <Text style={styles.mixTitle}>Discover Weekly</Text>
-                        <Text style={styles.mixSubtitle}>Brand new music picked just for you.</Text>
-                    </TouchableOpacity>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.moodScrollContent}>
+                    {moods.map((mood, index) => {
+                        const emoji = MOOD_EMOJI[mood.name] || '🎵';
+                        const color = MOOD_COLORS[mood.name] || COLORS[index % COLORS.length];
+                        const isSelected = selectedMood === mood.name;
+                        const apiCount = moodApiSongs[mood.name]?.length;
+                        const img = MOOD_IMAGES[mood.name];
+                        return (
+                            <TouchableOpacity
+                                key={mood.name}
+                                style={styles.moodTile}
+                                activeOpacity={0.85}
+                                onPress={() => handleMoodPress(mood.name)}
+                            >
+                                <Image source={{ uri: img }} style={styles.moodTileImage} />
+                                <View style={[styles.moodTileOverlay, { backgroundColor: color + 'AA' }]} />
+                                <Text style={styles.moodTileEmoji}>{emoji}</Text>
+                                <View style={styles.moodTileBottom}>
+                                    <Text style={styles.moodTileName}>{mood.name}</Text>
+                                    <Text style={styles.moodTileCount}>{apiCount || mood.songCount} songs</Text>
+                                </View>
+                            </TouchableOpacity>
+                        );
+                    })}
                 </ScrollView>
             </View>
+
+            {selectedMood && moodLoading && (
+                <View style={styles.section}>
+                    <View style={{ paddingVertical: 30, alignItems: 'center' }}>
+                        <Icon name="hourglass-outline" size={24} color="#888" />
+                        <Text style={{ color: '#888', marginTop: 8, fontSize: 13 }}>Loading {selectedMood} songs...</Text>
+                    </View>
+                </View>
+            )}
 
             <View style={styles.section}>
                 <View style={styles.sectionHeader}>
@@ -511,19 +694,19 @@ const HomeScreen = ({ navigation }: any) => {
 
     const renderPodcastsCategory = () => (
         <>
-            <TouchableOpacity style={styles.heroBanner} activeOpacity={0.9}>
+            <TouchableOpacity style={styles.heroBanner} activeOpacity={0.9} onPress={() => playPlaylist(allSongs.filter(s => ['Lofi', 'Ambient', 'Classical'].includes(s.genre || '')).slice(0, 10))}>
                 <ImageBackground source={{ uri: PODCAST_IMAGES[0] }} style={styles.heroBannerImage}>
                     <View style={styles.heroOverlay}>
                         <View style={styles.heroBadge}>
-                            <Icon name="mic" size={12} color="#FF6B6B" style={{ marginRight: 4 }} />
-                            <Text style={[styles.heroBadgeText, { color: '#FF6B6B' }]}>FEATURED PODCAST</Text>
+                            <Icon name="mic" size={12} color="#1DB954" style={{ marginRight: 4 }} />
+                            <Text style={[styles.heroBadgeText, { color: '#1DB954' }]}>FEATURED PODCAST</Text>
                         </View>
                         <Text style={styles.heroTitle}>The Daily Beat</Text>
                         <Text style={styles.heroSubtitle}>Your daily dose of music news, interviews, and behind-the-scenes stories from the industry.</Text>
                         <View style={styles.heroActionContainer}>
-                            <TouchableOpacity style={styles.heroPlayButton}>
-                                <Icon name="add" size={16} color="#000000" />
-                                <Text style={styles.heroPlayText}>Follow</Text>
+                            <TouchableOpacity style={styles.heroPlayButton} onPress={() => playPlaylist(allSongs.filter(s => ['Lofi', 'Ambient', 'Classical'].includes(s.genre || '')).slice(0, 10))}>
+                                <Icon name="play-sharp" size={16} color="#000000" />
+                                <Text style={styles.heroPlayText}>Listen Now</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -595,7 +778,27 @@ const HomeScreen = ({ navigation }: any) => {
 
     const renderRadioCategory = () => (
         <>
-            <View style={styles.radioHeroContainer}>
+            <TouchableOpacity style={styles.radioHeroContainer} activeOpacity={0.85} onPress={async () => {
+                if (radioStations.length > 0) {
+                    const station = radioStations[0];
+                    const streamUrl = station.url_resolved || station.url;
+                    try {
+                        await TrackPlayer.reset();
+                        await TrackPlayer.add({
+                            id: station.stationuuid,
+                            url: streamUrl,
+                            title: station.name,
+                            artist: 'Live Radio',
+                            artwork: station.favicon || RADIO_IMAGES[0],
+                        });
+                        await TrackPlayer.play();
+                    } catch (e) {
+                        playPlaylist([...allSongs].sort(() => Math.random() - 0.5).slice(0, 20));
+                    }
+                } else {
+                    playPlaylist([...allSongs].sort(() => Math.random() - 0.5).slice(0, 20));
+                }
+            }}>
                 <View style={styles.radioHeroInner}>
                     <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#1DB954', justifyContent: 'center', alignItems: 'center' }}>
                         <Icon name="radio" size={32} color="#FFFFFF" />
@@ -603,7 +806,7 @@ const HomeScreen = ({ navigation }: any) => {
                     <Text style={styles.radioHeroTitle}>Live Radio</Text>
                     <Text style={styles.radioHeroSubtitle}>{radioStations.length > 0 ? `${radioStations.length} stations available` : 'Stations loading...'}</Text>
                 </View>
-            </View>
+            </TouchableOpacity>
 
             <View style={styles.section}>
                 <View style={styles.sectionHeader}>
@@ -820,12 +1023,12 @@ const HomeScreen = ({ navigation }: any) => {
                     <TouchableOpacity style={styles.headerIconButton} onPress={() => navigation.navigate('Search')}>
                         <Icon name="search-outline" size={20} color="#FFFFFF" />
                     </TouchableOpacity>
-                    <TouchableOpacity
+                    {/* <TouchableOpacity
                         style={styles.headerIconButton}
                         onPress={() => navigation.navigate('Notification')}
                     >
                         <Icon name="notifications-outline" size={20} color="#FFFFFF" />
-                    </TouchableOpacity>
+                    </TouchableOpacity> */}
                 </View>
             </View>
 
@@ -856,7 +1059,7 @@ const HomeScreen = ({ navigation }: any) => {
                 {activeCategory === 'Workout' && renderWorkoutCategory()}
                 {activeCategory === 'Focus Mood' && renderFocusCategory()}
 
-                <View style={{ height: 50 }} />
+                <View style={{ height: 50 + miniPlayerHeight }} />
             </ScrollView>
         </SafeAreaView>
     );
@@ -865,7 +1068,7 @@ const HomeScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#0A0A0A' },
     scrollView: { flex: 1 },
-    scrollContent: { paddingBottom: 20 },
+    scrollContent: { paddingBottom: 0 },
 
     header: {
         flexDirection: 'row',
@@ -968,10 +1171,27 @@ const styles = StyleSheet.create({
     },
     recentArt: { width: '100%', height: '100%', resizeMode: 'cover' },
     fallbackArtContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    recentPlayOverlay: {
+        position: 'absolute',
+        bottom: 6,
+        right: 6,
+    },
+    recentPlayBtn: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.4,
+        shadowRadius: 4,
+        elevation: 4,
+    },
     recentTitle: { color: '#FFFFFF', fontSize: 13, fontWeight: '600', marginTop: 2 },
     recentArtist: { color: '#888888', fontSize: 11, marginTop: 1 },
 
-    // Playlist Cards
     playlistCard: {
         width: 160,
         marginRight: 16
@@ -989,52 +1209,75 @@ const styles = StyleSheet.create({
     playlistTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
     playlistSongs: { color: '#B3B3B3', fontSize: 12, marginTop: 2 },
 
-    moodCardWrapper: {
-        width: 140,
-        marginRight: 12,
-    },
-    moodCard: {
-        height: 120,
+    moodScrollContent: { paddingLeft: 20, paddingRight: 8, gap: 12 },
+
+    moodTile: {
+        width: 150,
+        height: 200,
         borderRadius: 16,
-        padding: 16,
+        overflow: 'hidden',
+        position: 'relative',
+    },
+    moodTileImage: {
+        width: '100%',
+        height: '100%',
+        resizeMode: 'cover',
+    },
+    moodTileOverlay: {
+    },
+    moodTileEmoji: {
+        position: 'absolute',
+        top: 12,
+        right: 12,
+        fontSize: 48,
+        transform: [{ rotate: '15deg' }],
+        opacity: 0.95,
+        textShadowColor: 'rgba(0,0,0,0.3)',
+        textShadowOffset: { width: 0, height: 2 },
+        textShadowRadius: 4,
+    },
+    moodTileBottom: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        padding: 14,
+        paddingBottom: 14,
+    },
+    moodTileName: {
+        color: '#FFFFFF',
+        fontSize: 18,
+        fontWeight: '800',
+        letterSpacing: -0.3,
+        textShadowColor: 'rgba(0,0,0,0.4)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 3,
+    },
+    moodTileCount: {
+        color: 'rgba(255,255,255,0.8)',
+        fontSize: 11,
+        fontWeight: '600',
+        marginTop: 2,
+        textShadowColor: 'rgba(0,0,0,0.4)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 3,
+    },
+    moodTilePlaying: {
+        position: 'absolute',
+        right: 12,
+        bottom: 20,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 5,
-    },
-    moodEmojiContainer: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: 'rgba(255,255,255,0.25)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    moodEmoji: { fontSize: 24 },
-    moodTitle: {
-        color: '#FFFFFF',
-        fontSize: 14,
-        fontWeight: '700',
-        textAlign: 'center',
-        marginBottom: 4,
-    },
-    moodSongCount: {
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        paddingHorizontal: 10,
-        paddingVertical: 2,
-        borderRadius: 12,
-    },
-    moodSongCountText: {
-        color: '#FFFFFF',
-        fontSize: 10,
-        fontWeight: '600',
+        shadowRadius: 4,
+        elevation: 3,
     },
 
-    // Made For You Cards
     mixCard: { width: 160, marginRight: 16 },
     mixImage: { width: 160, height: 160, borderRadius: 12, marginBottom: 8 },
     mixTitle: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },

@@ -17,7 +17,7 @@ const App = () => {
 
     const setup = async () => {
       try {
-        await TrackPlayer.setupPlayer();
+        await TrackPlayer.setupPlayer({});
         if (isCancelled) return;
         await TrackPlayer.updateOptions({
           capabilities: [
@@ -38,20 +38,51 @@ const App = () => {
           },
         });
 
-        TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, async (event) => {
-          const track = event.track;
-          if (track) {
-            await saveToRecentlyPlayed({
-              id: track.id || 'unknown',
-              title: track.title || 'Unknown',
-              artist: track.artist || 'Unknown Artist',
-              album: (track as any).album || '',
-              duration: track.duration ? `${Math.floor(track.duration / 60)}:${String(Math.floor(track.duration % 60)).padStart(2, '0')}` : '0:00',
-              url: track.url || '',
-              artwork: (typeof track.artwork === 'string' ? track.artwork : (track.artwork as any)?.uri) || 'https://picsum.photos/seed/song/400',
-            });
+        // TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, async (event) => {
+        //   const track = event.track;
+        //   if (track) {
+        //     await saveToRecentlyPlayed({
+        //       id: track.id || 'unknown',
+        //       title: track.title || 'Unknown',
+        //       artist: track.artist || 'Unknown Artist',
+        //       album: (track as any).album || '',
+        //       duration: track.duration ? `${Math.floor(track.duration / 60)}:${String(Math.floor(track.duration % 60)).padStart(2, '0')}` : '0:00',
+        //       url: track.url || '',
+        //       artwork: (typeof track.artwork === 'string' ? track.artwork : (track.artwork as any)?.uri) || 'https://picsum.photos/seed/song/400',
+        //     });
+        //   }
+        // });
+        const trackListener = TrackPlayer.addEventListener(
+          Event.PlaybackActiveTrackChanged,
+          async (event) => {
+
+            const track = event.track;
+
+            if (track) {
+              await saveToRecentlyPlayed({
+                id: track.id || 'unknown',
+                title: track.title || 'Unknown',
+                artist: track.artist || 'Unknown Artist',
+                album: (track as any).album || '',
+
+                duration: track.duration
+                  ? `${Math.floor(track.duration / 60)}:${String(
+                    Math.floor(track.duration % 60)
+                  ).padStart(2, '0')}`
+                  : '0:00',
+
+                url: track.url || '',
+
+                artwork:
+                  typeof track.artwork === 'string'
+                    ? track.artwork
+                    : (track.artwork as any)?.uri ||
+                    'https://picsum.photos/seed/song/400',
+              });
+            }
+
           }
-        });
+        );
       } catch (error: any) {
         if (
           error?.code === 'player_already_initialized' ||
