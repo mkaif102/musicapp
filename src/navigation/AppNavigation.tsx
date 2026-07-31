@@ -5,6 +5,7 @@ import { View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigationState } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
 
 import HomeScreen from '../screens/privatescreens/HomeScreen';
@@ -45,9 +46,8 @@ import MoodDetailScreen from '../screens/privatescreens/MoodDetailScreen';
 
 const AuthStack = createNativeStackNavigator();
 const LoggedInStack = createNativeStackNavigator();
+const InnerStack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
-
-
 
 const MainTabs = () => {
     return (
@@ -121,7 +121,6 @@ const MainTabs = () => {
                         component={ProfileScreen}
                     />
                 </Tab.Navigator>
-                <MiniPlayer />
             </View>
         </SafeAreaView>
     );
@@ -160,96 +159,116 @@ const AuthNavigator = ({ initialRoute = 'Splash' }: { initialRoute?: string }) =
     </AuthStack.Navigator>
 );
 
+const AppShell = () => {
+    const currentRouteName = useNavigationState(state => state?.routes?.[state?.index ?? 0]?.name);
+    const isOnSongDetail = currentRouteName === 'SongDetail';
+    return (
+    <View style={{ flex: 1 }}>
+        <InnerStack.Navigator
+            screenOptions={{
+                headerShown: false,
+                animation: 'slide_from_right',
+            }}
+        >
+            <InnerStack.Screen
+                name="MainTabs"
+                component={MainTabs}
+            />
+            <InnerStack.Screen
+                name="EditProfile"
+                component={EditProfileScreen}
+            />
+            <InnerStack.Screen
+                name="MyPlaylists"
+                component={MyPlaylistsScreen}
+            />
+            <InnerStack.Screen
+                name="UserPlaylists"
+                component={UserPlaylistsScreen}
+            />
+            <InnerStack.Screen
+                name="Favorites"
+                component={FavoritesScreen}
+            />
+            <InnerStack.Screen
+                name="History"
+                component={HistoryScreen}
+            />
+            <InnerStack.Screen
+                name="HelpSupport"
+                component={HelpSupportScreen}
+            />
+            <InnerStack.Screen
+                name="FAQsList"
+                component={FAQsListScreen}
+            />
+            <InnerStack.Screen
+                name="ArtistDetail"
+                component={ArtistDetailScreen}
+            />
+            <InnerStack.Screen
+                name="PlaylistDetail"
+                component={PlaylistDetailScreen}
+            />
+            <InnerStack.Screen
+                name="Notification"
+                component={NotificationScreen}
+            />
+            <InnerStack.Screen
+                name="RecentlyPlayed"
+                component={RecentlyPlayedScreen}
+            />
+            <InnerStack.Screen
+                name="Search"
+                component={SearchScreen}
+            />
+            <InnerStack.Screen
+                name="HelpCenter"
+                component={HelpCenterScreen}
+            />
+            <InnerStack.Screen
+                name="PrivacyPolicy"
+                component={PrivacyPolicyScreen}
+            />
+            <InnerStack.Screen
+                name="TermsOfService"
+                component={TermsOfServiceScreen}
+            />
+            <InnerStack.Screen
+                name="Chat"
+                component={ChatScreen}
+            />
+            <InnerStack.Screen
+                name="Radio"
+                component={RadioScreen}
+            />
+            <InnerStack.Screen
+                name="LikedSongs"
+                component={LikedSongsScreen}
+            />
+            <InnerStack.Screen
+                name="MoodDetail"
+                component={MoodDetailScreen}
+            />
+        </InnerStack.Navigator>
+        {!isOnSongDetail && <MiniPlayer />}
+    </View>
+    );
+};
+
 const LoggedInNavigator = () => (
     <LoggedInStack.Navigator
         screenOptions={{
             headerShown: false,
-            animation: 'slide_from_right',
         }}
     >
         <LoggedInStack.Screen
-            name="MainTabs"
-            component={MainTabs}
-        />
-        <LoggedInStack.Screen
-            name="EditProfile"
-            component={EditProfileScreen}
-        />
-        <LoggedInStack.Screen
-            name="MyPlaylists"
-            component={MyPlaylistsScreen}
-        />
-        <LoggedInStack.Screen
-            name="UserPlaylists"
-            component={UserPlaylistsScreen}
-        />
-        <LoggedInStack.Screen
-            name="Favorites"
-            component={FavoritesScreen}
-        />
-        <LoggedInStack.Screen
-            name="History"
-            component={HistoryScreen}
-        />
-        <LoggedInStack.Screen
-            name="HelpSupport"
-            component={HelpSupportScreen}
-        />
-        <LoggedInStack.Screen
-            name="FAQsList"
-            component={FAQsListScreen}
-        />
-        <LoggedInStack.Screen
-            name="ArtistDetail"
-            component={ArtistDetailScreen}
-        />
-        <LoggedInStack.Screen
-            name="PlaylistDetail"
-            component={PlaylistDetailScreen}
-        />
-        <LoggedInStack.Screen
-            name="Notification"
-            component={NotificationScreen}
-        />
-        <LoggedInStack.Screen
-            name="RecentlyPlayed"
-            component={RecentlyPlayedScreen}
-        />
-        <LoggedInStack.Screen
-            name="Search"
-            component={SearchScreen}
-        />
-        <LoggedInStack.Screen
-            name="HelpCenter"
-            component={HelpCenterScreen}
-        />
-        <LoggedInStack.Screen
-            name="PrivacyPolicy"
-            component={PrivacyPolicyScreen}
-        />
-        <LoggedInStack.Screen
-            name="TermsOfService"
-            component={TermsOfServiceScreen}
-        />
-        <LoggedInStack.Screen
-            name="Chat"
-            component={ChatScreen}
+            name="AppShell"
+            component={AppShell}
         />
         <LoggedInStack.Screen
             name="SongDetail"
             component={SongDetailScreen}
-        />
-        <LoggedInStack.Screen
-            name="Radio"
-            component={RadioScreen}
-        />
-        <LoggedInStack.Screen
-            name="LikedSongs"
-            component={LikedSongsScreen}
-        />
-        <LoggedInStack.Screen
-            name="MoodDetail"
-            component={MoodDetailScreen}
         />
     </LoggedInStack.Navigator>
 );

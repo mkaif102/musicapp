@@ -380,6 +380,13 @@ const HomeScreen = ({ navigation }: any) => {
             url: song.url,
             artwork: song.artwork || 'https://picsum.photos/seed/song/400',
         });
+        try {
+            await TrackPlayer.reset();
+            await TrackPlayer.add(songToTrack(song));
+            await TrackPlayer.play();
+        } catch (error) {
+            console.log('playSong error:', error);
+        }
         navigation.navigate('SongDetail', {
             song: {
                 title: song.title, artist: song.artist,

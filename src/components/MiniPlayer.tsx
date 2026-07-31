@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -6,24 +6,28 @@ import {
     TouchableOpacity,
     Image,
     Animated,
+    Dimensions,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import TrackPlayer, {
     usePlaybackState,
     State,
     useActiveTrack,
+    useProgress,
 } from 'react-native-track-player';
 import { colors } from '../theme/Colors';
 
-export const MINI_PLAYER_HEIGHT = 80;
+export const MINI_PLAYER_HEIGHT = 110;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const MiniPlayerContent = () => {
     const navigation = useNavigation<any>();
-    const route = useRoute();
+
     const activeTrack = useActiveTrack();
     const playbackState = usePlaybackState();
     const isPlaying = playbackState?.state === State.Playing;
+    const { position, duration } = useProgress(1000);
 
     const barHeights = useRef([
         new Animated.Value(8),
@@ -75,7 +79,20 @@ const MiniPlayerContent = () => {
         };
     }, [isPlaying]);
 
-    if (!activeTrack || route.name === 'SongDetail') return null;
+    const handleSeek = useCallback(async (e: any) => {
+        try {
+            const x = e?.nativeEvent?.locationX;
+            if (x == null) return;
+            const barWidth = SCREEN_WIDTH - 24;
+            const ratio = Math.max(0, Math.min(1, x / barWidth));
+            const seekTime = ratio * (duration || 0);
+            await TrackPlayer.seekTo(seekTime);
+        } catch (error) {
+            console.log('Mini player seek error:', error);
+        }
+    }, [duration]);
+
+    if (!activeTrack) return null;
 
     const handlePlayPause = async (e: any) => {
         e.stopPropagation();
@@ -98,6 +115,25 @@ const MiniPlayerContent = () => {
         } catch (error) {
             console.log('Mini player close error:', error);
         }
+    };
+
+    const formatTime = (seconds: number) => {
+        if (!seconds || isNaN(seconds)) return '0:00';
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const progress = duration > 0 ? (position / duration) * 100 : 0;
+
+    const getArtworkUri = (artwork: unknown): string => {
+        if (!artwork) return 'https://picsum.photos/seed/song/100';
+        if (typeof artwork === 'string') return artwork;
+        if (typeof artwork === 'object' && artwork !== null) {
+            const { uri } = artwork as { uri?: string };
+            if (typeof uri === 'string' && uri) return uri;
+        }
+        return 'https://picsum.photos/seed/song/100';
     };
 
     const handleTap = async () => {
@@ -151,14 +187,14 @@ const MiniPlayerContent = () => {
                     style={styles.imageContainer}
                 >
                     <Image
-                        source={{ uri: (activeTrack.artwork as string) || 'https://picsum.photos/seed/song/100' }}
+                        source={{ uri: getArtworkUri(activeTrack.artwork) }}
                         style={styles.artwork}
                     />
 
                     <View style={styles.playOverlay}>
                         <Icon
                             name={isPlaying ? 'pause' : 'play'}
-                            size={24}
+                            size={20}
                             color="#1DB954"
                         />
                     </View>
@@ -177,58 +213,44 @@ const MiniPlayerContent = () => {
                     </Text>
                 </TouchableOpacity>
 
-                {isPlaying ? (
-                    <View style={styles.equalizerContainer}>
-                        <Animated.View style={[styles.equalizerBar, { height: barHeights[0] }]} />
-                        <Animated.View style={[styles.equalizerBar, { height: barHeights[1] }]} />
-                        <Animated.View style={[styles.equalizerBar, { height: barHeights[2] }]} />
-                        <Animated.View style={[styles.equalizerBar, { height: barHeights[3] }]} />
-                        <Animated.View style={[styles.equalizerBar, { height: barHeights[4] }]} />
-                    </View>
-                ) : null}
-
                 <TouchableOpacity
                     style={styles.closeButton}
                     onPress={handleClose}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                    <Icon
-                        name="close"
-                        size={16}
-                        color="#FFFFFF"
-                    />
+                    <Icon name="close" size={14} color="#FFFFFF" />
                 </TouchableOpacity>
             </View>
+
+            <TouchableOpacity
+                style={styles.progressContainer}
+                onPress={handleSeek}
+                activeOpacity={1}
+            >
+                <View style={styles.progressTrack}>
+                    <View style={[styles.progressFill, { width: `${progress}%` }]} />
+                    <View style={[styles.progressThumb, { left: `${progress}%` }]} />
+                </View>
+                <View style={styles.timeRow}>
+                    <Text style={styles.timeText}>{formatTime(position)}</Text>
+                    <Text style={styles.timeText}>{formatTime(duration)}</Text>
+                </View>
+            </TouchableOpacity>
         </View>
     );
 };
 
-class MiniPlayer extends React.Component {
-    state = { hasError: false };
-
-    static getDerivedStateFromError() {
-        return { hasError: true };
-    }
-
-    componentDidCatch(error: any) {
-        console.log('MiniPlayer error caught:', error?.message);
-    }
-
-    render() {
-        if (this.state.hasError) return null;
-        return <MiniPlayerContent />;
-    }
-}
-
 const styles = StyleSheet.create({
     container: {
         position: 'absolute',
-        bottom: 76,
+        bottom: 90,
         left: 12,
         right: 12,
         backgroundColor: '#1A1A1A',
         borderRadius: 16,
-        padding: 12,
+        paddingHorizontal: 12,
+        paddingTop: 10,
+        paddingBottom: 8,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.5,
@@ -236,6 +258,7 @@ const styles = StyleSheet.create({
         elevation: 12,
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.06)',
+        zIndex: 999,
     },
     content: {
         flexDirection: 'row',
@@ -245,8 +268,8 @@ const styles = StyleSheet.create({
         position: 'relative',
     },
     artwork: {
-        width: 48,
-        height: 48,
+        width: 44,
+        height: 44,
         borderRadius: 8,
         backgroundColor: '#2A2A2A',
     },
@@ -278,29 +301,54 @@ const styles = StyleSheet.create({
         marginTop: 2,
         letterSpacing: 0.2,
     },
-    equalizerContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        marginRight: 10,
-        height: 28,
-        width: 40,
-    },
-    equalizerBar: {
-        width: 3,
-        backgroundColor: colors.green,
-        borderRadius: 2,
-    },
     closeButton: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: 28,
+        height: 28,
+        borderRadius: 14,
         backgroundColor: 'rgba(255,255,255,0.08)',
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.05)',
     },
+    progressContainer: {
+        marginTop: 8,
+        paddingHorizontal: 2,
+    },
+    progressTrack: {
+        height: 4,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderRadius: 2,
+        position: 'relative',
+        justifyContent: 'center',
+    },
+    progressFill: {
+        height: 4,
+        backgroundColor: colors.green,
+        borderRadius: 2,
+        position: 'absolute',
+        left: 0,
+        top: 0,
+    },
+    progressThumb: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: colors.green,
+        position: 'absolute',
+        marginLeft: -5,
+        top: -3,
+    },
+    timeRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 4,
+    },
+    timeText: {
+        color: '#777',
+        fontSize: 10,
+        fontWeight: '500',
+    },
 });
 
-export default MiniPlayer;
+export default MiniPlayerContent;

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
     View,
     Text,
@@ -8,6 +8,7 @@ import {
     Image,
     StatusBar,
     Dimensions,
+    PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -16,6 +17,7 @@ import TrackPlayer, {
     usePlaybackState,
     State,
     useActiveTrack,
+    useProgress,
 } from 'react-native-track-player';
 import {
     getLikedSongs,
@@ -25,13 +27,14 @@ import {
 import { colors } from '../../theme/Colors';
 
 const { width } = Dimensions.get('window');
-const WAVEFORM_BARS = 40;
 
 const LikedSongsScreen = ({ navigation }: any) => {
     const [likedSongs, setLikedSongs] = useState<LikedSong[]>([]);
     const playbackState = usePlaybackState();
     const activeTrack = useActiveTrack();
+    const { position, duration } = useProgress(300);
     const isPlaying = playbackState?.state === State.Playing;
+    const [sliderWidth, setSliderWidth] = useState(0);
 
     useFocusEffect(
         useCallback(() => {
@@ -48,6 +51,20 @@ const LikedSongsScreen = ({ navigation }: any) => {
         const parts = String(d || '0:00').split(':').map(Number);
         if (parts.length === 2) return parts[0] * 60 + parts[1];
         return 0;
+    };
+
+    const formatTime = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const handleSeek = async (time: number) => {
+        try {
+            await TrackPlayer.seekTo(time);
+        } catch (error) {
+            console.log('Seek error:', error);
+        }
     };
 
     const handlePlaySong = async (song: LikedSong, index: number) => {
@@ -105,22 +122,43 @@ const LikedSongsScreen = ({ navigation }: any) => {
         loadLikedSongs();
     };
 
-    const generateWaveform = (seed: number) => {
-        const bars = [];
-        for (let i = 0; i < WAVEFORM_BARS; i++) {
-            const h = 4 + Math.abs(Math.sin(seed * 0.1 + i * 0.5)) * 20;
-            bars.push(h);
+    const createPanResponder = (totalDuration: number) => {
+        return PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: () => true,
+            onPanResponderGrant: () => { },
+            onPanResponderMove: (evt) => {
+                if (sliderWidth > 0) {
+                    const touchX = evt.nativeEvent.locationX;
+                    const progress = Math.max(0, Math.min(1, touchX / sliderWidth));
+                    const seekTime = progress * totalDuration;
+                    handleSeek(seekTime);
+                }
+            },
+            onPanResponderRelease: () => { },
+        });
+    };
+
+    const handleProgressPress = (event: any, totalDuration: number) => {
+        const { locationX } = event.nativeEvent;
+        if (sliderWidth > 0) {
+            const progress = Math.max(0, Math.min(1, locationX / sliderWidth));
+            const seekTime = progress * totalDuration;
+            handleSeek(seekTime);
         }
-        return bars;
     };
 
     const renderSong = ({ item, index }: { item: LikedSong; index: number }) => {
         const isActive = activeTrack?.url === (item.cachedPath || item.url) || activeTrack?.url === item.url;
         const isCurrentPlaying = isActive && isPlaying;
-        const waveform = generateWaveform(index + 1);
+        const songDuration = parseDuration(item.duration);
+        const currentPosition = isActive ? position : 0;
+        const totalDuration = isActive ? duration : songDuration;
+        const progressPercent = totalDuration > 0 ? (currentPosition / totalDuration) * 100 : 0;
+        const panResponder = createPanResponder(totalDuration);
 
         return (
-            <View style={styles.songCard}>
+            <View style={[styles.songCard, isActive && styles.songCardActive]}>
                 <TouchableOpacity
                     style={styles.artworkContainer}
                     activeOpacity={0.8}
@@ -169,23 +207,47 @@ const LikedSongsScreen = ({ navigation }: any) => {
                         <Text style={styles.songArtist} numberOfLines={1}>{item.artist}</Text>
                     </TouchableOpacity>
 
-                    <View style={styles.waveformContainer}>
-                        {waveform.map((h, i) => {
-                            const progress = isActive ? 0.4 : 0;
-                            const isFilled = i / WAVEFORM_BARS <= progress;
-                            return (
-                                <View
-                                    key={i}
-                                    style={[
-                                        styles.waveBar,
-                                        { height: h },
-                                        isFilled && styles.waveBarFilled,
-                                    ]}
-                                />
-                            );
-                        })}
+                    <View style={styles.progressContainer}>
+                        <View
+                            style={styles.progressBarContainer}
+                            onLayout={(event) => {
+                                const { width: w } = event.nativeEvent.layout;
+                                setSliderWidth(w);
+                            }}
+                            {...panResponder.panHandlers}
+                        >
+                            <TouchableOpacity
+                                style={styles.progressTouchable}
+                                onPress={(event) => handleProgressPress(event, totalDuration)}
+                                activeOpacity={1}
+                            >
+                                <View style={styles.progressBackground}>
+                                    <View
+                                        style={[
+                                            styles.progressFill,
+                                            { width: `${Math.min(progressPercent, 100)}%` }
+                                        ]}
+                                    />
+                                    {isActive && (
+                                        <View
+                                            style={[
+                                                styles.progressThumb,
+                                                { left: `${Math.min(progressPercent, 100)}%` }
+                                            ]}
+                                        />
+                                    )}
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                        <View style={styles.timeContainer}>
+                            <Text style={styles.timeText}>
+                                {isActive ? formatTime(currentPosition) : formatTime(0)}
+                            </Text>
+                            <Text style={styles.timeText}>
+                                {formatTime(totalDuration)}
+                            </Text>
+                        </View>
                     </View>
-
                 </View>
 
                 <TouchableOpacity
@@ -207,36 +269,13 @@ const LikedSongsScreen = ({ navigation }: any) => {
                     style={styles.backButton}
                     onPress={() => navigation.goBack()}
                 >
-                    <Icon name="arrow-back" size={22} color="#FFFFFF" />
+                    <Icon name="chevron-back" size={22} color="#FFFFFF" />
                 </TouchableOpacity>
                 <View style={styles.headerCenter}>
                     <Text style={styles.headerTitle}>Liked Songs</Text>
                     <Text style={styles.headerCount}>{likedSongs.length} tracks</Text>
                 </View>
-                {/* {likedSongs.length > 0 && (
-                    <TouchableOpacity style={styles.playAllBtn} onPress={playAll}>
-                        <Icon name="play" size={18} color="#FFFFFF" />
-                    </TouchableOpacity>
-                )} */}
-                {/* {likedSongs.length === 0 && <View style={{ width: 38 }} />} */}
             </View>
-
-            {/* {likedSongs.length > 0 && (
-                <View style={styles.sortBar}>
-                    <TouchableOpacity style={styles.sortItem}>
-                        <Icon name="time-outline" size={14} color="#999" />
-                        <Text style={styles.sortText}>Recent</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.sortItemActive}>
-                        <Icon name="heart" size={14} color="#FF5500" />
-                        <Text style={styles.sortTextActive}>Likes</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.sortItem}>
-                        <Icon name="trending-up-outline" size={14} color="#999" />
-                        <Text style={styles.sortText}>Reposts</Text>
-                    </TouchableOpacity>
-                </View>
-            )} */}
 
             {likedSongs.length > 0 ? (
                 <FlatList
@@ -298,42 +337,29 @@ const styles = StyleSheet.create({
         backgroundColor: '#FF5500',
     },
 
-    sortBar: {
-        flexDirection: 'row',
-        paddingHorizontal: 16,
-        paddingBottom: 10,
-        gap: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255,255,255,0.05)',
-    },
-    sortItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    sortItemActive: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    sortText: { color: '#999', fontSize: 12, fontWeight: '600' },
-    sortTextActive: { color: '#FF5500', fontSize: 12, fontWeight: '600' },
-
     listContent: {
         paddingTop: 8,
         paddingBottom: 100,
+        paddingHorizontal: 12,
     },
     separator: {
-        height: 1,
-        backgroundColor: 'rgba(255,255,255,0.04)',
-        marginLeft: 100,
+        height: 8,
+        backgroundColor: 'transparent',
     },
 
     songCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 16,
+        paddingHorizontal: 12,
         paddingVertical: 10,
+        backgroundColor: '#1A1A1A',
+        borderRadius: 12,
+        marginHorizontal: 4,
+    },
+    songCardActive: {
+        backgroundColor: 'rgba(29,185,84,0.12)',
+        borderWidth: 1,
+        borderColor: 'rgba(29,185,84,0.2)',
     },
 
     artworkContainer: {
@@ -365,6 +391,7 @@ const styles = StyleSheet.create({
 
     songDetails: {
         flex: 1,
+        marginRight: 8,
     },
     songTitle: {
         color: '#FFFFFF',
@@ -378,46 +405,59 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
 
-    waveformContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 1.5,
-        marginBottom: 6,
+    progressContainer: {
+        width: '100%',
+    },
+    progressBarContainer: {
+        width: '100%',
         height: 24,
+        justifyContent: 'center',
     },
-    waveBar: {
-        width: 2.5,
-        borderRadius: 1.5,
-        backgroundColor: '#333',
+    progressTouchable: {
+        width: '100%',
+        height: 24,
+        justifyContent: 'center',
     },
-    waveBarFilled: {
-        backgroundColor: colors.green,
+    progressBackground: {
+        width: '100%',
+        height: 3,
+        backgroundColor: '#3D3D3D',
+        borderRadius: 2,
+        justifyContent: 'center',
     },
-
-    songMeta: {
+    progressFill: {
+        height: 3,
+        backgroundColor: '#1DB954',
+        borderRadius: 2,
+    },
+    progressThumb: {
+        position: 'absolute',
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        backgroundColor: '#1DB954',
+        marginLeft: -6,
+        shadowColor: '#1DB954',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    timeContainer: {
         flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
+        justifyContent: 'space-between',
+        paddingHorizontal: 2,
+        marginTop: 2,
     },
-    metaItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 3,
-    },
-    metaDot: {
-        width: 2,
-        height: 2,
-        borderRadius: 1,
-        backgroundColor: '#555',
-        marginHorizontal: 2,
-    },
-    metaText: {
-        color: '#777',
-        fontSize: 11,
+    timeText: {
+        color: '#888',
+        fontSize: 10,
+        fontWeight: '400',
     },
 
     moreButton: {
         padding: 10,
+        alignSelf: 'flex-start',
     },
 
     emptyContainer: {

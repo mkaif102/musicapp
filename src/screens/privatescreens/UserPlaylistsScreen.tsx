@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
-import TrackPlayer, { State, usePlaybackState, useActiveTrack } from 'react-native-track-player';
+import TrackPlayer, { State, RepeatMode, usePlaybackState, useActiveTrack } from 'react-native-track-player';
 import { colors } from '../../theme/Colors';
 import { useMiniPlayerHeight } from '../../hooks/useMiniPlayerHeight';
 import {
@@ -202,7 +202,6 @@ const UserPlaylistsScreen = ({ navigation }: any) => {
                     </TouchableOpacity>
                 </Animated.View>
 
-                {/* Songs List - Sab songs yahan show honge */}
                 {renderPlaylistSongs(item)}
             </View>
         );
@@ -245,7 +244,6 @@ const UserPlaylistsScreen = ({ navigation }: any) => {
         );
     };
 
-    // Songs list render - har playlist ke saare songs
     const renderPlaylistSongs = (playlist: CustomPlaylist) => {
         if (!playlist.songs || playlist.songs.length === 0) {
             return (
@@ -273,7 +271,6 @@ const UserPlaylistsScreen = ({ navigation }: any) => {
         );
     };
 
-    // Empty state for no playlists
     const renderEmptyState = () => (
         <View style={styles.emptyContainer}>
             <View style={styles.emptyIconContainer}>
@@ -301,10 +298,7 @@ const UserPlaylistsScreen = ({ navigation }: any) => {
                     <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
                         <Icon name="chevron-back" size={24} color="#FFFFFF" />
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Playlists</Text>
-                    <TouchableOpacity style={styles.headerAction} onPress={loadPlaylists}>
-                        {/* <Icon name="refresh-outline" size={22} color="#888" /> */}
-                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>My Playlists</Text>
                 </View>
 
                 {customPlaylists.length > 0 ? (
@@ -315,13 +309,13 @@ const UserPlaylistsScreen = ({ navigation }: any) => {
                         showsVerticalScrollIndicator={false}
                         contentContainerStyle={[styles.listContent, { paddingBottom: 100 + miniPlayerHeight }]}
                         ItemSeparatorComponent={() => <View style={styles.separator} />}
-                        ListHeaderComponent={() => (
-                            <View style={styles.listHeader}>
-                                <Text style={styles.listHeaderTitle}>
-                                    {customPlaylists.length} Playlist{customPlaylists.length !== 1 ? 's' : ''}
-                                </Text>
-                            </View>
-                        )}
+                        // ListHeaderComponent={() => (
+                        //     <View style={styles.listHeader}>
+                        //         <Text style={styles.listHeaderTitle}>
+                        //             {customPlaylists.length} Playlist{customPlaylists.length !== 1 ? 's' : ''}
+                        //         </Text>
+                        //     </View>
+                        // )}
                         ListFooterComponent={() => (
                             <View style={styles.footerNote}>
                                 <Icon name="information-circle-outline" size={14} color="#444" />
@@ -350,7 +344,7 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        justifyContent: 'space-between', // ye important hai
         paddingHorizontal: 16,
         paddingTop: 8,
         paddingBottom: 20,
@@ -366,10 +360,11 @@ const styles = StyleSheet.create({
         borderColor: 'rgba(255,255,255,0.04)',
     },
     headerTitle: {
-        fontSize: 28,
+        fontSize: 22,
         fontWeight: '800',
         color: '#FFFFFF',
-        letterSpacing: -0.5
+        textAlign: 'center',
+        flex: 1,
     },
     headerAction: {
         width: 40,

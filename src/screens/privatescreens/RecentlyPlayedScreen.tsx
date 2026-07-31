@@ -21,7 +21,7 @@ import {
 } from '../../utils/recentlyPlayed';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import MiniPlayer, { MINI_PLAYER_HEIGHT } from '../../components/MiniPlayer';
+import { MINI_PLAYER_HEIGHT } from '../../components/MiniPlayer';
 import { useMiniPlayerHeight } from '../../hooks/useMiniPlayerHeight';
 
 const removeSongFromRecentlyPlayed = async (songId: string): Promise<void> => {
@@ -553,7 +553,6 @@ const RecentlyPlayedScreen = ({ navigation }: any) => {
                     {renderFooterContent()}
                 </View>
             )}
-            <MiniPlayer />
         </View>
     );
 };
